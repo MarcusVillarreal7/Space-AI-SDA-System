@@ -1,0 +1,13 @@
+num_objects: 100
+duration_hours: 24.0
+time_step_seconds: 60.0
+num_sensors: 3
+sensor_types:
+- radar
+- optical
+measurement_noise_std_m: 100.0
+measurement_cadence_seconds: 60.0
+output_dir: !!python/object/apply:pathlib.PosixPath
+- data
+- processed
+save_ground_truth: true

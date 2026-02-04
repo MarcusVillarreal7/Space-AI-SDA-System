@@ -1,0 +1,8 @@
+host: 0.0.0.0
+port: 8000
+reload: false
+workers: 4
+database_url: postgresql://localhost/space_ai
+redis_url: redis://localhost:6379
+enable_cors: true
+api_key_required: false

@@ -1,0 +1,18 @@
+predictor_hidden_dim: 256
+predictor_num_layers: 4
+predictor_num_heads: 8
+predictor_dropout: 0.1
+predictor_sequence_length: 10
+predictor_prediction_horizon: 24
+classifier_type: ensemble
+num_classes: 4
+class_names:
+- operational_satellite
+- debris
+- maneuvering_object
+- potential_threat
+batch_size: 32
+learning_rate: 0.0001
+num_epochs: 100
+early_stopping_patience: 10
+mc_dropout_samples: 50

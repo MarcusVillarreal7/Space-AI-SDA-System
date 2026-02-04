@@ -1,0 +1,7 @@
+process_noise_std: 1.0
+measurement_noise_std: 100.0
+track_init_threshold: 3
+track_init_window: 5
+track_delete_threshold: 5
+association_gate_threshold: 9.21
+association_method: hungarian
