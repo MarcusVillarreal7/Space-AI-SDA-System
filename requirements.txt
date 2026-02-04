@@ -1,0 +1,65 @@
+# Orbital Mechanics & Space
+skyfield==1.48
+sgp4==2.23
+poliastro==0.17.0
+astropy==6.0.0
+
+# Numerical Computing
+numpy==1.26.4
+scipy==1.12.0
+pandas==2.2.0
+polars==0.20.7
+
+# Machine Learning - Core
+torch==2.2.0
+torchvision==0.17.0
+scikit-learn==1.4.0
+xgboost==2.0.3
+
+# Machine Learning - Utilities
+transformers==4.37.2
+optuna==3.5.0
+shap==0.44.1
+
+# Filtering & Tracking
+filterpy==1.4.5
+
+# Data Processing
+pyyaml==6.0.1
+python-dateutil==2.8.2
+pytz==2024.1
+
+# API & Backend
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+pydantic==2.6.1
+python-multipart==0.0.9
+websockets==12.0
+
+# Database
+sqlalchemy==2.0.27
+psycopg2-binary==2.9.9
+redis==5.0.1
+asyncpg==0.29.0
+
+# Visualization & Plotting
+matplotlib==3.8.2
+seaborn==0.13.2
+plotly==5.18.0
+
+# Logging & Monitoring
+loguru==0.7.2
+python-json-logger==2.0.7
+prometheus-client==0.19.0
+
+# Testing (included in main for CI/CD)
+pytest==8.0.0
+pytest-cov==4.1.0
+pytest-asyncio==0.23.4
+pytest-benchmark==4.0.0
+
+# Utilities
+requests==2.31.0
+tqdm==4.66.1
+python-dotenv==1.0.1
+click==8.1.7

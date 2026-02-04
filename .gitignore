@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Data
+data/
+*.tle
+*.h5
+*.parquet
+*.csv
+
+# Logs
+logs/
+*.log
+*.jsonl
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.cursor/
+
+# Models
+models/*.pth
+models/*.pkl
+*.weights
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Environment
+.env
+.env.local
+
+# Docker
+*.log
+docker-compose.override.yml
+
+# Distribution
+dist/
+build/
+*.egg-info/
