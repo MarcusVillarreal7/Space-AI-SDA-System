@@ -1,7 +1,7 @@
 # Orbital Mechanics & Space
 skyfield==1.48
 sgp4==2.23
-poliastro==0.17.0
+# poliastro - Removed: Not compatible with Python 3.12, not needed for Phase 1
 astropy==6.0.0
 
 # Numerical Computing

@@ -41,10 +41,11 @@ Track development progress, technical decisions, challenges, and learnings throu
 1. **Python 3.10 as minimum version**
    - Rationale: Balance of modern features (structural pattern matching, better type hints) and stability
    - Alternative considered: Python 3.11 (faster but less widely adopted)
+   - Update: Project works with Python 3.12
 
 2. **Skyfield over Poliastro for primary orbital mechanics**
    - Rationale: Better SGP4 accuracy, more comprehensive documentation, actively maintained
-   - Note: Still including Poliastro for additional orbital analysis tools
+   - Note: Removed Poliastro due to Python 3.12 compatibility issues; not needed for Phase 1
 
 3. **FastAPI over Flask/Django**
    - Rationale: Native async support, automatic OpenAPI docs, better performance
@@ -63,7 +64,8 @@ Track development progress, technical decisions, challenges, and learnings throu
    - Benefit: Catch configuration errors early
 
 #### Challenges
-- None encountered yet (setup phase)
+- **Poliastro compatibility**: poliastro==0.17.0 not compatible with Python 3.12
+  - Solution: Removed from requirements; Skyfield + SGP4 + Astropy sufficient for our needs
 
 #### Learnings
 - Defense projects require significantly more upfront documentation than typical ML projects
