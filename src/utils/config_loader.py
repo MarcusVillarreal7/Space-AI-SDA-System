@@ -46,7 +46,7 @@ class TrackingConfig(BaseModel):
     
     # Data association
     association_gate_threshold: float = Field(9.21, gt=0, description="Chi-squared gate threshold (95% for 3D)")
-    association_method: str = Field("hungarian", regex="^(gnn|hungarian)$", description="Association algorithm")
+    association_method: str = Field("hungarian", pattern="^(gnn|hungarian)$", description="Association algorithm")
     
     class Config:
         """Pydantic config."""
@@ -65,7 +65,7 @@ class MLConfig(BaseModel):
     predictor_prediction_horizon: int = Field(24, ge=1, description="Prediction horizon (hours)")
     
     # Classifier
-    classifier_type: str = Field("ensemble", regex="^(xgboost|neural|ensemble)$", description="Classifier type")
+    classifier_type: str = Field("ensemble", pattern="^(xgboost|neural|ensemble)$", description="Classifier type")
     num_classes: int = Field(4, ge=2, description="Number of object classes")
     class_names: List[str] = Field(
         ["operational_satellite", "debris", "maneuvering_object", "potential_threat"],
