@@ -102,6 +102,33 @@ def ecef_to_geodetic(position_ecef: np.ndarray) -> Tuple[float, float, float]:
     return lat, lon, alt
 
 
+def eci_to_geodetic(position_eci: np.ndarray, gmst: float) -> Tuple[float, float, float]:
+    """
+    Convert Earth-Centered Inertial (ECI) to geodetic coordinates.
+    Convenience function that combines ECI->ECEF->Geodetic transformations.
+    
+    Args:
+        position_eci: Position vector in ECI frame [x, y, z] (km)
+        gmst: Greenwich Mean Sidereal Time (radians)
+    
+    Returns:
+        Tuple of (latitude, longitude, altitude) in (radians, radians, km)
+    
+    Example:
+        >>> pos_eci = np.array([7000.0, 0.0, 0.0])
+        >>> gmst = 0.0
+        >>> lat, lon, alt = eci_to_geodetic(pos_eci, gmst)
+        >>> print(f"Lat: {np.degrees(lat):.2f}°, Lon: {np.degrees(lon):.2f}°, Alt: {alt:.2f} km")
+    """
+    # First convert ECI to ECEF
+    position_ecef = eci_to_ecef(position_eci, gmst)
+    
+    # Then convert ECEF to geodetic
+    lat, lon, alt = ecef_to_geodetic(position_ecef)
+    
+    return lat, lon, alt
+
+
 def geodetic_to_ecef(lat: float, lon: float, alt: float) -> np.ndarray:
     """
     Convert geodetic coordinates to ECEF.

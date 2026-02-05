@@ -12,6 +12,7 @@ from src.utils.coordinates import (
     eci_to_ecef,
     ecef_to_eci,
     ecef_to_geodetic,
+    eci_to_geodetic,
     geodetic_to_ecef,
     orbital_elements_to_state_vector,
 )
@@ -137,6 +138,21 @@ class TestCoordinates:
         
         # Velocity should be perpendicular to position
         assert np.dot(pos, vel) == pytest.approx(0.0, abs=0.1)
+    
+    def test_eci_to_geodetic(self):
+        """Test ECI to geodetic conversion."""
+        # Position on equator at 7000 km radius
+        pos_eci = np.array([7000.0, 0.0, 0.0])
+        gmst = 0.0
+        
+        lat, lon, alt = eci_to_geodetic(pos_eci, gmst)
+        
+        # Should be on equator (lat ≈ 0)
+        assert lat == pytest.approx(0.0, abs=0.01)
+        # Longitude should be near 0 (depends on GMST)
+        assert lon == pytest.approx(0.0, abs=0.01)
+        # Altitude should be ~622 km (7000 - 6378)
+        assert alt == pytest.approx(622.0, abs=1.0)
 
 
 if __name__ == "__main__":
