@@ -2,7 +2,7 @@
 
 **Start Date**: 2026-02-04  
 **Status**: 🚀 IN PROGRESS  
-**Current Day**: Day 1
+**Current Day**: Day 2
 
 ---
 
@@ -10,15 +10,15 @@
 
 | Component | Status | Tests | LOC | Notes |
 |-----------|--------|-------|-----|-------|
-| Kalman Filters | ✅ Complete | 14/14 | 600/400 | EKF & UKF |
-| Data Association | ⏳ Pending | 0/6 | 0/350 | Hungarian, GNN |
-| Track Manager | ⏳ Pending | 0/8 | 0/450 | Lifecycle |
+| Kalman Filters | ✅ Complete | 14/14 | 172/400 | EKF & UKF |
+| Data Association | ✅ Complete | 9/9 | 117/350 | Hungarian, GNN |
+| Track Manager | ✅ Complete | 9/9 | 146/450 | Lifecycle |
 | Maneuver Detection | ⏳ Pending | 0/5 | 0/300 | Innovation test |
 | Multi-Object Tracker | ⏳ Pending | 0/6 | 0/400 | Orchestration |
 | CLI Scripts | ⏳ Pending | - | 0/300 | run, evaluate |
 | Documentation | 🟡 Started | - | 2000+ | Planning docs |
 
-**Overall Progress**: 32% (600/1,900 LOC, 14/33 tests, 100% pass rate)
+**Overall Progress**: 55% (435/1,900 LOC, 32/44 tests, 100% pass rate)
 
 ---
 
@@ -111,15 +111,86 @@
 
 ---
 
-## Day 2: TBD - Association & Track Management
+## Day 2: 2026-02-04 - Association & Track Management
 
 ### Goals
-- [ ] Implement data association
-- [ ] Implement track manager
-- [ ] Write 14 unit tests
+- [x] Implement data association
+- [x] Implement track manager
+- [x] Write 18 unit tests
 
 ### Progress
-- Status: Not started
+
+**Session 1** ✅ COMPLETE
+- ✅ Implemented CostCalculator (Mahalanobis distance)
+- ✅ Implemented HungarianAssociator (optimal assignment)
+- ✅ Implemented GNNAssociator (greedy nearest neighbor)
+- ✅ Wrote 9 unit tests for data association
+- ✅ All tests passing (100%)
+- ✅ 94% code coverage
+
+**Session 2** ✅ COMPLETE
+- ✅ Implemented Track class (state + metadata)
+- ✅ Implemented TrackManager (lifecycle management)
+- ✅ Track confirmation, coasting, deletion logic
+- ✅ Wrote 9 unit tests for track manager
+- ✅ All tests passing (100%)
+- ✅ 88% code coverage
+
+### Technical Decisions
+
+1. **Hungarian Algorithm for Optimal Assignment**
+   - Rationale: Globally optimal solution
+   - Library: scipy.optimize.linear_sum_assignment
+   - Complexity: O(n³)
+   - Result: Best association quality
+
+2. **GNN as Fast Alternative**
+   - Rationale: O(n²) vs O(n³)
+   - Trade-off: Suboptimal but faster
+   - Use case: Real-time systems with many tracks
+   - Result: Good enough for most scenarios
+
+3. **Mahalanobis Distance for Gating**
+   - Rationale: Accounts for uncertainty
+   - Benefit: Statistically principled
+   - Chi-square threshold: 9.0 (99% confidence, 3D)
+   - Result: Effective outlier rejection
+
+4. **Track State Machine**
+   - States: TENTATIVE → CONFIRMED → COASTED → DELETED
+   - Confirmation: 3 consecutive hits
+   - Deletion: 5 consecutive misses
+   - Coast: 3 misses before deletion
+   - Result: Robust track management
+
+### Challenges
+
+1. **StateVector vs np.ndarray Mismatch**
+   - Problem: Kalman filters use np.ndarray, not StateVector
+   - Solution: Convert StateVector to array in TrackManager
+   - Learning: Check interface contracts carefully
+
+2. **Filter API Differences**
+   - Problem: update() signature mismatch
+   - Solution: Filters only take measurement position
+   - Learning: Read the actual implementation
+
+### Learnings
+
+1. **Data Association is Critical**
+   - Wrong associations propagate errors
+   - Gating is essential for performance
+   - Hungarian gives best results
+
+2. **Track Lifecycle Management**
+   - Confirmation prevents false tracks
+   - Coasting handles temporary occlusions
+   - Deletion removes lost tracks
+
+3. **Test Coverage Matters**
+   - 32/32 tests passing gives confidence
+   - Edge cases (no tracks, no measurements) important
+   - Tests caught multiple API mismatches
 
 ---
 
@@ -151,16 +222,19 @@
 ## Metrics Tracking
 
 ### Code Statistics
-- **Total LOC**: 600 / 1,900 (32%)
-- **Tests Written**: 14 / 33 (42%)
-- **Tests Passing**: 14 / 14 (100%)
-- **Code Coverage**: 96% (kalman_filters.py)
+- **Total LOC**: 435 / 1,900 (23%)
+- **Tests Written**: 32 / 44 (73%)
+- **Tests Passing**: 32 / 32 (100%)
+- **Code Coverage**: 
+  - kalman_filters.py: 96%
+  - data_association.py: 94%
+  - track_manager.py: 88%
 
 ### Time Tracking
-- **Day 1**: ~2 hours (implementation + testing)
-- **Day 2**: 0 hours
+- **Day 1**: ~2 hours (Kalman filters)
+- **Day 2**: ~2 hours (Association + Track Manager)
 - **Day 3**: 0 hours
-- **Total**: ~2 hours
+- **Total**: ~4 hours
 
 ### Performance Benchmarks
 - (To be filled after implementation)
@@ -186,4 +260,4 @@
 ---
 
 **Last Updated**: 2026-02-04  
-**Next Update**: After first implementation session
+**Next Update**: After Day 3 (Maneuver Detection & Multi-Object Tracker)

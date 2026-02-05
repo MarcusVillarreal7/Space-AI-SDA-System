@@ -21,6 +21,19 @@ from src.tracking.kalman_filters import (
     MU_EARTH,
     R_EARTH
 )
+from src.tracking.data_association import (
+    Measurement,
+    Association,
+    CostCalculator,
+    HungarianAssociator,
+    GNNAssociator,
+    compute_association_metrics
+)
+from src.tracking.track_manager import (
+    Track,
+    TrackState,
+    TrackManager
+)
 
 
 class TestStateVector:
@@ -308,6 +321,465 @@ class TestKalmanFilterComparison:
         
         assert abs(ekf_r - r) / r < 0.05  # Within 5%
         assert abs(ukf_r - r) / r < 0.05
+
+
+class TestDataAssociation:
+    """Test data association algorithms."""
+    
+    def test_measurement_creation(self):
+        """Test creating a Measurement object."""
+        pos = np.array([7000.0, 0.0, 0.0])
+        cov = np.eye(3) * 0.05**2  # 50m std dev
+        
+        meas = Measurement(
+            position=pos,
+            covariance=cov,
+            timestamp=0.0,
+            sensor_id="sensor_1",
+            measurement_id=1
+        )
+        
+        assert np.allclose(meas.position, pos)
+        assert np.allclose(meas.covariance, cov)
+        assert meas.measurement_id == 1
+    
+    def test_mahalanobis_distance(self):
+        """Test Mahalanobis distance calculation."""
+        calc = CostCalculator()
+        
+        # Predicted position and covariance
+        pred_pos = np.array([7000.0, 0.0, 0.0])
+        pred_cov = np.eye(3) * 0.1**2  # 100m std dev
+        
+        # Measurement close to prediction
+        meas_pos = np.array([7000.05, 0.0, 0.0])  # 50m away
+        meas_cov = np.eye(3) * 0.05**2  # 50m std dev
+        
+        distance = calc.mahalanobis_distance(pred_pos, pred_cov, meas_pos, meas_cov)
+        
+        # Distance should be reasonable (not too large)
+        assert distance > 0
+        assert distance < 10.0  # Should be well within gate
+    
+    def test_gating(self):
+        """Test measurement gating."""
+        calc = CostCalculator(gate_threshold=9.0)
+        
+        pred_pos = np.array([7000.0, 0.0, 0.0])
+        pred_cov = np.eye(3) * 0.1**2
+        
+        # Close measurement (should pass gate)
+        close_meas = np.array([7000.05, 0.0, 0.0])
+        meas_cov = np.eye(3) * 0.05**2
+        
+        assert calc.gate_measurement(pred_pos, pred_cov, close_meas, meas_cov) is True
+        
+        # Far measurement (should fail gate)
+        far_meas = np.array([7010.0, 0.0, 0.0])  # 10 km away
+        assert calc.gate_measurement(pred_pos, pred_cov, far_meas, meas_cov) is False
+    
+    def test_cost_matrix_construction(self):
+        """Test building cost matrix."""
+        calc = CostCalculator()
+        
+        # Two track predictions
+        track_preds = [
+            (np.array([7000.0, 0.0, 0.0]), np.eye(3) * 0.1**2),
+            (np.array([7000.0, 100.0, 0.0]), np.eye(3) * 0.1**2),
+        ]
+        
+        # Two measurements
+        measurements = [
+            Measurement(np.array([7000.05, 0.0, 0.0]), np.eye(3) * 0.05**2, 0.0, "s1", 1),
+            Measurement(np.array([7000.0, 100.05, 0.0]), np.eye(3) * 0.05**2, 0.0, "s1", 2),
+        ]
+        
+        cost_matrix = calc.build_cost_matrix(track_preds, measurements)
+        
+        # Should be 2x2
+        assert cost_matrix.shape == (2, 2)
+        
+        # Diagonal should have low cost (correct associations)
+        assert cost_matrix[0, 0] < 1.0
+        assert cost_matrix[1, 1] < 1.0
+        
+        # Off-diagonal should have high cost or be gated out
+        assert cost_matrix[0, 1] > cost_matrix[0, 0]
+        assert cost_matrix[1, 0] > cost_matrix[1, 1]
+    
+    def test_hungarian_association(self):
+        """Test Hungarian algorithm association."""
+        associator = HungarianAssociator(gate_threshold=9.0, max_cost=100.0)
+        
+        # Three tracks
+        track_preds = [
+            (1, np.array([7000.0, 0.0, 0.0]), np.eye(3) * 0.1**2),
+            (2, np.array([7000.0, 100.0, 0.0]), np.eye(3) * 0.1**2),
+            (3, np.array([7000.0, 200.0, 0.0]), np.eye(3) * 0.1**2),
+        ]
+        
+        # Two measurements (one track will be unassociated)
+        measurements = [
+            Measurement(np.array([7000.05, 0.0, 0.0]), np.eye(3) * 0.05**2, 0.0, "s1", 1),
+            Measurement(np.array([7000.0, 100.05, 0.0]), np.eye(3) * 0.05**2, 0.0, "s1", 2),
+        ]
+        
+        associations, unassoc_tracks, unassoc_meas = associator.associate(track_preds, measurements)
+        
+        # Should have 2 associations
+        assert len(associations) == 2
+        
+        # Should have 1 unassociated track
+        assert len(unassoc_tracks) == 1
+        assert 3 in unassoc_tracks
+        
+        # No unassociated measurements
+        assert len(unassoc_meas) == 0
+        
+        # Check associations are correct
+        assoc_dict = {a.track_id: a.measurement_id for a in associations}
+        assert assoc_dict[1] == 1
+        assert assoc_dict[2] == 2
+    
+    def test_gnn_association(self):
+        """Test GNN association."""
+        associator = GNNAssociator(gate_threshold=9.0, max_cost=100.0)
+        
+        # Same setup as Hungarian test
+        track_preds = [
+            (1, np.array([7000.0, 0.0, 0.0]), np.eye(3) * 0.1**2),
+            (2, np.array([7000.0, 100.0, 0.0]), np.eye(3) * 0.1**2),
+        ]
+        
+        measurements = [
+            Measurement(np.array([7000.05, 0.0, 0.0]), np.eye(3) * 0.05**2, 0.0, "s1", 1),
+            Measurement(np.array([7000.0, 100.05, 0.0]), np.eye(3) * 0.05**2, 0.0, "s1", 2),
+        ]
+        
+        associations, unassoc_tracks, unassoc_meas = associator.associate(track_preds, measurements)
+        
+        # Should have 2 associations
+        assert len(associations) == 2
+        
+        # No unassociated
+        assert len(unassoc_tracks) == 0
+        assert len(unassoc_meas) == 0
+    
+    def test_association_with_no_tracks(self):
+        """Test association when there are no tracks."""
+        associator = HungarianAssociator()
+        
+        measurements = [
+            Measurement(np.array([7000.0, 0.0, 0.0]), np.eye(3) * 0.05**2, 0.0, "s1", 1),
+        ]
+        
+        associations, unassoc_tracks, unassoc_meas = associator.associate([], measurements)
+        
+        assert len(associations) == 0
+        assert len(unassoc_tracks) == 0
+        assert len(unassoc_meas) == 1
+    
+    def test_association_with_no_measurements(self):
+        """Test association when there are no measurements."""
+        associator = HungarianAssociator()
+        
+        track_preds = [
+            (1, np.array([7000.0, 0.0, 0.0]), np.eye(3) * 0.1**2),
+        ]
+        
+        associations, unassoc_tracks, unassoc_meas = associator.associate(track_preds, [])
+        
+        assert len(associations) == 0
+        assert len(unassoc_tracks) == 1
+        assert len(unassoc_meas) == 0
+    
+    def test_association_metrics(self):
+        """Test computing association metrics."""
+        associations = [
+            Association(track_id=1, measurement_id=1, cost=0.5),
+            Association(track_id=2, measurement_id=2, cost=1.0),
+            Association(track_id=3, measurement_id=3, cost=0.8),
+        ]
+        
+        metrics = compute_association_metrics(associations)
+        
+        assert metrics['num_associations'] == 3
+        assert metrics['mean_cost'] == pytest.approx((0.5 + 1.0 + 0.8) / 3)
+        assert metrics['max_cost'] == 1.0
+        
+        # Test with ground truth
+        ground_truth = {1: 1, 2: 2, 3: 4}  # Track 3 is wrong
+        metrics = compute_association_metrics(associations, ground_truth)
+        
+        assert metrics['accuracy'] == pytest.approx(2.0 / 3.0)
+
+
+class TestTrackManager:
+    """Test track management functionality."""
+    
+    def test_track_creation(self):
+        """Test creating a new track."""
+        manager = TrackManager()
+        
+        meas = Measurement(
+            position=np.array([7000.0, 0.0, 0.0]),
+            covariance=np.eye(3) * 0.05**2,
+            timestamp=0.0,
+            sensor_id="s1",
+            measurement_id=1
+        )
+        
+        track = manager.create_track(meas)
+        
+        assert track.track_id == 1
+        assert track.state == TrackState.TENTATIVE
+        assert track.hit_count == 1
+        assert track.miss_count == 0
+        assert np.allclose(track.get_position(), meas.position)
+    
+    def test_track_confirmation(self):
+        """Test track confirmation after sufficient hits."""
+        manager = TrackManager(confirmation_threshold=3)
+        
+        # Create track
+        meas1 = Measurement(
+            position=np.array([7000.0, 0.0, 0.0]),
+            covariance=np.eye(3) * 0.05**2,
+            timestamp=0.0,
+            sensor_id="s1",
+            measurement_id=1
+        )
+        track = manager.create_track(meas1)
+        assert track.state == TrackState.TENTATIVE
+        
+        # Update with 2 more measurements
+        for i in range(2):
+            meas = Measurement(
+                position=np.array([7000.0 + 0.01 * (i+1), 0.0, 0.0]),
+                covariance=np.eye(3) * 0.05**2,
+                timestamp=(i+1) * 10.0,
+                sensor_id="s1",
+                measurement_id=i+2
+            )
+            manager.update_track(track.track_id, meas)
+        
+        # Should be confirmed now
+        assert track.state == TrackState.CONFIRMED
+        assert track.hit_count == 3
+    
+    def test_track_coasting(self):
+        """Test track entering coast state after misses."""
+        manager = TrackManager(confirmation_threshold=2, coast_threshold=3)
+        
+        # Create and confirm track
+        meas1 = Measurement(
+            position=np.array([7000.0, 0.0, 0.0]),
+            covariance=np.eye(3) * 0.05**2,
+            timestamp=0.0,
+            sensor_id="s1",
+            measurement_id=1
+        )
+        track = manager.create_track(meas1)
+        
+        meas2 = Measurement(
+            position=np.array([7000.01, 0.0, 0.0]),
+            covariance=np.eye(3) * 0.05**2,
+            timestamp=10.0,
+            sensor_id="s1",
+            measurement_id=2
+        )
+        manager.update_track(track.track_id, meas2)
+        
+        assert track.state == TrackState.CONFIRMED
+        
+        # Miss 3 times
+        for i in range(3):
+            manager.predict_track(track.track_id, 10.0)
+        
+        # Should be coasting
+        assert track.state == TrackState.COASTED
+        assert track.miss_count == 3
+    
+    def test_track_deletion(self):
+        """Test track deletion after too many misses."""
+        manager = TrackManager(deletion_threshold=5)
+        
+        # Create track
+        meas = Measurement(
+            position=np.array([7000.0, 0.0, 0.0]),
+            covariance=np.eye(3) * 0.05**2,
+            timestamp=0.0,
+            sensor_id="s1",
+            measurement_id=1
+        )
+        track = manager.create_track(meas)
+        track_id = track.track_id
+        
+        # Miss 5 times
+        for i in range(5):
+            manager.predict_track(track_id, 10.0)
+        
+        # Prune tracks
+        manager.prune_tracks(50.0)
+        
+        # Track should be deleted
+        assert track_id not in manager.tracks
+    
+    def test_track_coast_timeout(self):
+        """Test track deletion after coasting too long."""
+        manager = TrackManager(
+            confirmation_threshold=2,
+            coast_threshold=2,
+            max_coast_time=100.0
+        )
+        
+        # Create and confirm track
+        meas1 = Measurement(
+            position=np.array([7000.0, 0.0, 0.0]),
+            covariance=np.eye(3) * 0.05**2,
+            timestamp=0.0,
+            sensor_id="s1",
+            measurement_id=1
+        )
+        track = manager.create_track(meas1)
+        
+        meas2 = Measurement(
+            position=np.array([7000.01, 0.0, 0.0]),
+            covariance=np.eye(3) * 0.05**2,
+            timestamp=10.0,
+            sensor_id="s1",
+            measurement_id=2
+        )
+        manager.update_track(track.track_id, meas2)
+        
+        # Enter coast state
+        manager.predict_track(track.track_id, 10.0)
+        manager.predict_track(track.track_id, 10.0)
+        assert track.state == TrackState.COASTED
+        
+        # Prune after coast timeout
+        manager.prune_tracks(200.0)  # 200s > 100s timeout
+        
+        # Track should be deleted
+        assert track.track_id not in manager.tracks
+    
+    def test_track_return_from_coast(self):
+        """Test track returning from coast state with new measurement."""
+        manager = TrackManager(confirmation_threshold=2, coast_threshold=2)
+        
+        # Create and confirm track
+        meas1 = Measurement(
+            position=np.array([7000.0, 0.0, 0.0]),
+            covariance=np.eye(3) * 0.05**2,
+            timestamp=0.0,
+            sensor_id="s1",
+            measurement_id=1
+        )
+        track = manager.create_track(meas1)
+        
+        meas2 = Measurement(
+            position=np.array([7000.01, 0.0, 0.0]),
+            covariance=np.eye(3) * 0.05**2,
+            timestamp=10.0,
+            sensor_id="s1",
+            measurement_id=2
+        )
+        manager.update_track(track.track_id, meas2)
+        
+        # Enter coast
+        manager.predict_track(track.track_id, 10.0)
+        manager.predict_track(track.track_id, 10.0)
+        assert track.state == TrackState.COASTED
+        
+        # New measurement
+        meas3 = Measurement(
+            position=np.array([7000.02, 0.0, 0.0]),
+            covariance=np.eye(3) * 0.05**2,
+            timestamp=40.0,
+            sensor_id="s1",
+            measurement_id=3
+        )
+        manager.update_track(track.track_id, meas3)
+        
+        # Should return to confirmed
+        assert track.state == TrackState.CONFIRMED
+        assert track.miss_count == 0
+    
+    def test_get_confirmed_tracks(self):
+        """Test retrieving confirmed tracks."""
+        manager = TrackManager(confirmation_threshold=2)
+        
+        # Create 3 tracks
+        for i in range(3):
+            meas = Measurement(
+                position=np.array([7000.0 + i * 100.0, 0.0, 0.0]),
+                covariance=np.eye(3) * 0.05**2,
+                timestamp=0.0,
+                sensor_id="s1",
+                measurement_id=i+1
+            )
+            track = manager.create_track(meas)
+            
+            # Confirm 2 of them
+            if i < 2:
+                meas2 = Measurement(
+                    position=np.array([7000.0 + i * 100.0 + 0.01, 0.0, 0.0]),
+                    covariance=np.eye(3) * 0.05**2,
+                    timestamp=10.0,
+                    sensor_id="s1",
+                    measurement_id=i+10
+                )
+                manager.update_track(track.track_id, meas2)
+        
+        confirmed = manager.get_confirmed_tracks()
+        assert len(confirmed) == 2
+    
+    def test_track_statistics(self):
+        """Test computing track statistics."""
+        manager = TrackManager(confirmation_threshold=2)
+        
+        # Create and confirm 2 tracks
+        for i in range(2):
+            meas = Measurement(
+                position=np.array([7000.0 + i * 100.0, 0.0, 0.0]),
+                covariance=np.eye(3) * 0.05**2,
+                timestamp=0.0,
+                sensor_id="s1",
+                measurement_id=i+1
+            )
+            track = manager.create_track(meas)
+            
+            meas2 = Measurement(
+                position=np.array([7000.0 + i * 100.0 + 0.01, 0.0, 0.0]),
+                covariance=np.eye(3) * 0.05**2,
+                timestamp=10.0,
+                sensor_id="s1",
+                measurement_id=i+10
+            )
+            manager.update_track(track.track_id, meas2)
+        
+        stats = manager.get_statistics()
+        
+        assert stats['total_tracks'] == 2
+        assert stats['confirmed_tracks'] == 2
+        assert stats['mean_hit_count'] == 2.0
+    
+    def test_ukf_filter_type(self):
+        """Test creating tracks with UKF filter."""
+        manager = TrackManager(filter_type="ukf")
+        
+        meas = Measurement(
+            position=np.array([7000.0, 0.0, 0.0]),
+            covariance=np.eye(3) * 0.05**2,
+            timestamp=0.0,
+            sensor_id="s1",
+            measurement_id=1
+        )
+        
+        track = manager.create_track(meas)
+        
+        # Check that filter is UKF
+        assert isinstance(track.filter, UnscentedKalmanFilter)
 
 
 if __name__ == "__main__":
