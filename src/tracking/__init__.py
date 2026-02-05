@@ -25,8 +25,8 @@ __author__ = "Space AI Project"
 from .kalman_filters import ExtendedKalmanFilter, UnscentedKalmanFilter, StateVector
 from .data_association import HungarianAssociator, GNNAssociator, Measurement, Association
 from .track_manager import Track, TrackManager, TrackState
-# from .maneuver_detection import InnovationDetector
-# from .multi_object_tracker import MultiObjectTracker
+from .maneuver_detection import InnovationDetector, MMAEDetector, ManeuverEvent
+from .multi_object_tracker import MultiObjectTracker, TrackerConfig
 
 __all__ = [
     "ExtendedKalmanFilter",
@@ -39,6 +39,9 @@ __all__ = [
     "Track",
     "TrackManager",
     "TrackState",
-    # "InnovationDetector",
-    # "MultiObjectTracker",
+    "InnovationDetector",
+    "MMAEDetector",
+    "ManeuverEvent",
+    "MultiObjectTracker",
+    "TrackerConfig",
 ]

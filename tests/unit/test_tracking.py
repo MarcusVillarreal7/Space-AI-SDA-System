@@ -782,5 +782,225 @@ class TestTrackManager:
         assert isinstance(track.filter, UnscentedKalmanFilter)
 
 
+class TestManeuverDetection:
+    """Test maneuver detection algorithms."""
+    
+    def test_innovation_detector_initialization(self):
+        """Test creating an InnovationDetector."""
+        from src.tracking.maneuver_detection import InnovationDetector
+        
+        detector = InnovationDetector(threshold=13.8, window_size=3)
+        
+        assert detector.threshold == 13.8
+        assert detector.window_size == 3
+        assert len(detector.innovation_history) == 0
+    
+    def test_innovation_detector_no_maneuver(self):
+        """Test that small innovations don't trigger detection."""
+        from src.tracking.maneuver_detection import InnovationDetector
+        
+        detector = InnovationDetector(threshold=13.8, window_size=3, min_detections=2)
+        
+        # Small innovation (normal tracking)
+        innovation = np.array([0.01, 0.01, 0.01])  # 10m error
+        innovation_cov = np.eye(3) * 0.1**2
+        
+        event = detector.detect(innovation, innovation_cov, 0.0, track_id=1)
+        
+        assert event is None
+    
+    def test_innovation_detector_maneuver(self):
+        """Test that large innovations trigger detection."""
+        from src.tracking.maneuver_detection import InnovationDetector
+        
+        detector = InnovationDetector(threshold=9.0, window_size=3, min_detections=2)
+        
+        # Large innovations (maneuver)
+        innovation = np.array([1.0, 1.0, 1.0])  # 1km error
+        innovation_cov = np.eye(3) * 0.05**2
+        
+        # Need multiple detections
+        event1 = detector.detect(innovation, innovation_cov, 0.0, track_id=1)
+        event2 = detector.detect(innovation, innovation_cov, 10.0, track_id=1)
+        event3 = detector.detect(innovation, innovation_cov, 20.0, track_id=1)
+        
+        # Should detect after min_detections
+        assert event2 is not None or event3 is not None
+    
+    def test_innovation_detector_reset(self):
+        """Test resetting detector state."""
+        from src.tracking.maneuver_detection import InnovationDetector
+        
+        detector = InnovationDetector()
+        
+        # Add some history
+        innovation = np.array([0.1, 0.1, 0.1])
+        innovation_cov = np.eye(3) * 0.1**2
+        detector.detect(innovation, innovation_cov, 0.0, track_id=1)
+        
+        assert 1 in detector.innovation_history
+        
+        # Reset
+        detector.reset(track_id=1)
+        
+        assert 1 not in detector.innovation_history
+    
+    def test_mmae_detector(self):
+        """Test MMAE detector initialization."""
+        from src.tracking.maneuver_detection import MMAEDetector
+        
+        detector = MMAEDetector(threshold=0.7)
+        
+        assert detector.threshold == 0.7
+        assert len(detector.model_probabilities) == 0
+
+
+class TestMultiObjectTracker:
+    """Test multi-object tracker."""
+    
+    def test_tracker_initialization(self):
+        """Test creating a MultiObjectTracker."""
+        from src.tracking.multi_object_tracker import MultiObjectTracker, TrackerConfig
+        
+        config = TrackerConfig(filter_type="ekf", association_method="hungarian")
+        tracker = MultiObjectTracker(config)
+        
+        assert tracker.config.filter_type == "ekf"
+        assert tracker.config.association_method == "hungarian"
+        assert tracker.update_count == 0
+    
+    def test_tracker_single_measurement(self):
+        """Test tracker with single measurement."""
+        from src.tracking.multi_object_tracker import MultiObjectTracker
+        from src.tracking.data_association import Measurement
+        
+        tracker = MultiObjectTracker()
+        
+        # Single measurement
+        meas = Measurement(
+            position=np.array([7000.0, 0.0, 0.0]),
+            covariance=np.eye(3) * 0.05**2,
+            timestamp=0.0,
+            sensor_id="s1",
+            measurement_id=1
+        )
+        
+        tracks = tracker.update([meas], 0.0)
+        
+        # Should create one track
+        assert len(tracks) == 1
+        assert tracks[0].track_id == 1
+    
+    def test_tracker_multiple_updates(self):
+        """Test tracker with multiple updates."""
+        from src.tracking.multi_object_tracker import MultiObjectTracker
+        from src.tracking.data_association import Measurement
+        
+        tracker = MultiObjectTracker()
+        
+        # First measurement
+        meas1 = Measurement(
+            position=np.array([7000.0, 0.0, 0.0]),
+            covariance=np.eye(3) * 0.05**2,
+            timestamp=0.0,
+            sensor_id="s1",
+            measurement_id=1
+        )
+        
+        tracks = tracker.update([meas1], 0.0)
+        assert len(tracks) == 1
+        
+        # Second measurement (close to first)
+        meas2 = Measurement(
+            position=np.array([7000.01, 0.0, 0.0]),
+            covariance=np.eye(3) * 0.05**2,
+            timestamp=10.0,
+            sensor_id="s1",
+            measurement_id=2
+        )
+        
+        tracks = tracker.update([meas2], 10.0)
+        
+        # Should still be one track (associated)
+        assert len(tracks) == 1
+        assert tracks[0].hit_count == 2
+    
+    def test_tracker_multiple_objects(self):
+        """Test tracker with multiple objects."""
+        from src.tracking.multi_object_tracker import MultiObjectTracker
+        from src.tracking.data_association import Measurement
+        
+        tracker = MultiObjectTracker()
+        
+        # Two measurements far apart
+        measurements = [
+            Measurement(
+                position=np.array([7000.0, 0.0, 0.0]),
+                covariance=np.eye(3) * 0.05**2,
+                timestamp=0.0,
+                sensor_id="s1",
+                measurement_id=1
+            ),
+            Measurement(
+                position=np.array([7000.0, 1000.0, 0.0]),
+                covariance=np.eye(3) * 0.05**2,
+                timestamp=0.0,
+                sensor_id="s1",
+                measurement_id=2
+            )
+        ]
+        
+        tracks = tracker.update(measurements, 0.0)
+        
+        # Should create two tracks
+        assert len(tracks) == 2
+    
+    def test_tracker_statistics(self):
+        """Test tracker statistics."""
+        from src.tracking.multi_object_tracker import MultiObjectTracker
+        from src.tracking.data_association import Measurement
+        
+        tracker = MultiObjectTracker()
+        
+        meas = Measurement(
+            position=np.array([7000.0, 0.0, 0.0]),
+            covariance=np.eye(3) * 0.05**2,
+            timestamp=0.0,
+            sensor_id="s1",
+            measurement_id=1
+        )
+        
+        tracker.update([meas], 0.0)
+        
+        stats = tracker.get_statistics()
+        
+        assert stats['update_count'] == 1
+        assert stats['total_measurements'] == 1
+        assert stats['total_tracks'] == 1
+    
+    def test_tracker_reset(self):
+        """Test resetting tracker."""
+        from src.tracking.multi_object_tracker import MultiObjectTracker
+        from src.tracking.data_association import Measurement
+        
+        tracker = MultiObjectTracker()
+        
+        meas = Measurement(
+            position=np.array([7000.0, 0.0, 0.0]),
+            covariance=np.eye(3) * 0.05**2,
+            timestamp=0.0,
+            sensor_id="s1",
+            measurement_id=1
+        )
+        
+        tracker.update([meas], 0.0)
+        assert tracker.update_count == 1
+        
+        tracker.reset()
+        
+        assert tracker.update_count == 0
+        assert len(tracker.track_manager.tracks) == 0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

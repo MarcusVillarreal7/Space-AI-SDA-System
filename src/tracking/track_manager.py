@@ -59,6 +59,7 @@ class Track:
     hit_count: int = 0
     miss_count: int = 0
     covariance_trace: float = 0.0
+    is_maneuvering: bool = False
     norad_id: Optional[int] = None
     
     def get_state_vector(self) -> StateVector:
