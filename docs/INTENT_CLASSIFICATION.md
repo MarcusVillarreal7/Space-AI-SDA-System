@@ -120,7 +120,70 @@ print(result.explanation)   # Human-readable explanation
 
 ## Test Results
 
-```
-33 passed in 2.66s
-Coverage: intent_classifier 91%, proximity_context 96%, threat_escalation 95%, asset_catalog 98%
-```
+**33 tests passed in 2.66s** | Run date: 2026-02-07
+
+### Coverage
+
+| Module | Statements | Missed | Coverage |
+|--------|-----------|--------|----------|
+| `intent_classifier.py` | 90 | 8 | 91% |
+| `proximity_context.py` | 52 | 2 | 96% |
+| `threat_escalation.py` | 57 | 3 | 95% |
+| `asset_catalog.py` | 44 | 1 | 98% |
+
+### Asset Catalog (6 tests)
+
+| Test | Validates | Result |
+|------|-----------|--------|
+| `test_default_catalog_non_empty` | Default catalog has >=4 assets | PASS |
+| `test_by_regime` | GEO filter returns >=2, all GEO | PASS |
+| `test_by_priority` | Priority filter respects max_priority | PASS |
+| `test_nearest` | Position near ISS orbit returns ISS | PASS |
+| `test_within_range` | 0 assets at origin, all at 100K km | PASS |
+| `test_empty_catalog` | Empty catalog returns None safely | PASS |
+
+### Proximity Context (8 tests)
+
+| Test | Validates | Result |
+|------|-----------|--------|
+| `test_classify_regime_leo` | 6771 km altitude -> LEO | PASS |
+| `test_classify_regime_meo` | 26560 km altitude -> MEO | PASS |
+| `test_classify_regime_geo` | 42164 km altitude -> GEO | PASS |
+| `test_approaching_object` | Negative closing rate, correct distance (~129 km) | PASS |
+| `test_receding_object` | Positive closing rate when moving away | PASS |
+| `test_tca_finite_when_approaching` | TCA > 0 and < inf for approaching object | PASS |
+| `test_tca_infinite_when_receding` | TCA = inf for receding object | PASS |
+| `test_no_catalog` | Empty catalog returns inf distance, None asset | PASS |
+
+### Threat Escalation Patterns (8 tests)
+
+| Test | Validates | Result |
+|------|-----------|--------|
+| `test_phasing_detected` | 4 minor maneuvers in window -> phasing | PASS |
+| `test_phasing_not_detected_too_few` | 2 maneuvers -> no phasing | PASS |
+| `test_phasing_ignores_normal` | All-normal history -> no phasing | PASS |
+| `test_shadowing_detected` | SK near asset for 14h -> shadowing | PASS |
+| `test_shadowing_not_detected_far` | SK at 5000 km -> no shadowing | PASS |
+| `test_evasive_detected` | 5 normal + 1 major -> evasion | PASS |
+| `test_evasive_not_detected_short` | Too-short history -> no evasion | PASS |
+| `test_detect_patterns_combined` | Multiple patterns detected together | PASS |
+
+### Intent Classifier (11 tests)
+
+| Test | Validates | Result |
+|------|-----------|--------|
+| `test_normal_class_no_threat` | Class 0 -> NOMINAL, NONE | PASS |
+| `test_station_keeping_base` | Class 2 far from assets -> SK, NONE | PASS |
+| `test_deorbit` | Class 5 -> DEORBIT, LOW | PASS |
+| `test_minor_maneuver_approaching_asset_escalates` | Class 3 approaching ISS -> RENDEZVOUS, >=ELEVATED | PASS |
+| `test_major_maneuver_very_close_is_high_threat` | Class 4 at ~29 km from ISS -> HIGH | PASS |
+| `test_low_confidence_reduces_threat` | 30% confidence reduces threat by 1 level | PASS |
+| `test_phasing_escalation` | Phasing history -> PHASING pattern, >=ELEVATED | PASS |
+| `test_explanation_contains_class_name` | Output includes "Major Maneuver" and "90%" | PASS |
+| `test_explanation_contains_asset` | Output includes "International Space Station" | PASS |
+| `test_unknown_maneuver_class` | Class 99 -> UNKNOWN intent | PASS |
+| `test_all_base_mappings` | All classes 0-5 produce valid IntentResult | PASS |
+
+### Full Suite Regression
+
+113 total tests passing (80 pre-existing + 33 new intent tests). No regressions.
