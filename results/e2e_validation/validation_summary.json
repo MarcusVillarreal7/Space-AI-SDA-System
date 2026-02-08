@@ -1,0 +1,52 @@
+{
+  "validation_date": "2026-02-08 11:09:49",
+  "device": "cuda",
+  "gpu": "NVIDIA GeForce RTX 4080 Laptop GPU",
+  "dataset": {
+    "n_objects": 1000,
+    "timesteps_per_object": 1440,
+    "chunk_size": 100,
+    "n_chunks": 10
+  },
+  "pipeline": {
+    "anomaly_detector": true,
+    "init_time_s": 0.14970636367797852
+  },
+  "performance": {
+    "total_time_s": 4.419806480407715,
+    "throughput_obj_per_sec": 226.25424991633406,
+    "latency_mean_ms": 3.3515376599789306,
+    "latency_p50_ms": 2.6655764995666686,
+    "latency_p95_ms": 3.4666552524868166,
+    "latency_p99_ms": 28.17339416960749,
+    "latency_max_ms": 114.79084999882616
+  },
+  "threat_scores": {
+    "mean": 40.065350724241604,
+    "std": 25.65184147149016,
+    "min": 0.1,
+    "max": 75.00625146862195,
+    "p50": 53.525,
+    "p95": 68.98826690635869,
+    "p99": 72.70194674753832
+  },
+  "tier_distribution": {
+    "MINIMAL": 365,
+    "LOW": 11,
+    "MODERATE": 315,
+    "ELEVATED": 309,
+    "CRITICAL": 0
+  },
+  "intent_distribution": {
+    "SURVEILLANCE": 625,
+    "STATION_KEEPING": 372,
+    "NOMINAL": 3
+  },
+  "anomaly_flagged": 50,
+  "sub_score_means": {
+    "intent": 59.375,
+    "anomaly": 49.988299999999995,
+    "proximity": 12.196102896966412,
+    "pattern": 24.92
+  }
+}
