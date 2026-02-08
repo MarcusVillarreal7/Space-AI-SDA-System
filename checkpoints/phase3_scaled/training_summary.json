@@ -1,0 +1,37 @@
+{
+  "config": {
+    "data_dir": "data/processed/features_1k_chunked",
+    "output_dir": "checkpoints/phase3_scaled",
+    "epochs": 5,
+    "batch_size": 128,
+    "learning_rate": 0.0001,
+    "device": "cuda"
+  },
+  "dataset": {
+    "train_sequences": 1112800,
+    "val_sequences": 278200,
+    "train_batches": 8694,
+    "val_batches": 2174
+  },
+  "model": {
+    "parameters": 235462,
+    "config": {
+      "d_model": 64,
+      "n_heads": 4,
+      "n_encoder_layers": 2,
+      "n_decoder_layers": 2,
+      "d_ff": 256,
+      "dropout": 0.1,
+      "input_dim": 24,
+      "output_dim": 6,
+      "max_seq_len": 100
+    }
+  },
+  "results": {
+    "best_val_loss": 0.01076049204738408,
+    "final_train_loss": 0.043917574476701776,
+    "final_val_loss": 0.01076049204738408,
+    "epochs_trained": 5
+  },
+  "timestamp": "2026-02-07T16:14:50.482214"
+}
