@@ -265,7 +265,8 @@ class Trainer:
             
             # Learning rate scheduling
             if self.scheduler is not None:
-                if val_loader is not None:
+                from torch.optim.lr_scheduler import ReduceLROnPlateau
+                if isinstance(self.scheduler, ReduceLROnPlateau) and val_loader is not None:
                     self.scheduler.step(val_metrics['loss'])
                 else:
                     self.scheduler.step()

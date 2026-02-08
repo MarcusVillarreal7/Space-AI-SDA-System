@@ -32,6 +32,8 @@ class TransformerConfig:
     input_dim: int = 24  # Input feature dimension
     output_dim: int = 6  # Output feature dimension (position + velocity)
     max_seq_len: int = 100  # Maximum sequence length for positional encoding
+    pred_horizon: int = 30  # Number of future timesteps to predict
+    use_parallel_decoder: bool = False  # Use parallel prediction head instead of AR decoder
 
 
 class PositionalEncoding(nn.Module):
@@ -249,6 +251,59 @@ class TransformerDecoderLayer(nn.Module):
         return x
 
 
+class ParallelPredictionHead(nn.Module):
+    """
+    DETR-style parallel prediction head.
+
+    Uses learned query tokens that cross-attend to encoder output to produce
+    all future timesteps simultaneously.  Training and inference share the
+    exact same code path, eliminating the autoregressive train/inference gap.
+    """
+
+    def __init__(self, config: TransformerConfig):
+        super().__init__()
+        d_model = config.d_model
+        pred_horizon = config.pred_horizon
+
+        # Learned query tokens — one per future timestep
+        self.query_tokens = nn.Parameter(torch.randn(1, pred_horizon, d_model) * 0.02)
+
+        # Positional encoding for temporal ordering of queries
+        self.query_pos = PositionalEncoding(d_model, max_len=pred_horizon, dropout=config.dropout)
+
+        # Cross-attention decoder layers (reuse existing architecture)
+        self.layers = nn.ModuleList([
+            TransformerDecoderLayer(d_model, config.n_heads, config.d_ff, config.dropout)
+            for _ in range(2)
+        ])
+
+        # Output projection to position + velocity
+        self.output_projection = nn.Linear(d_model, config.output_dim)
+
+    def forward(self, encoder_output: torch.Tensor) -> torch.Tensor:
+        """
+        Produce all pred_horizon predictions in parallel.
+
+        Args:
+            encoder_output: (batch, src_len, d_model) from the encoder
+
+        Returns:
+            predictions: (batch, pred_horizon, output_dim)
+        """
+        batch_size = encoder_output.size(0)
+
+        # Expand queries to batch
+        queries = self.query_tokens.expand(batch_size, -1, -1)
+        queries = self.query_pos(queries)
+
+        # Cross-attend to encoder output (no causal mask needed)
+        x = queries
+        for layer in self.layers:
+            x = layer(x, encoder_output)
+
+        return self.output_projection(x)
+
+
 class TrajectoryTransformer(nn.Module):
     """
     Transformer model for trajectory prediction.
@@ -287,7 +342,12 @@ class TrajectoryTransformer(nn.Module):
             TransformerDecoderLayer(config.d_model, config.n_heads, config.d_ff, config.dropout)
             for _ in range(config.n_decoder_layers)
         ])
-        
+
+        # Parallel prediction head (optional)
+        self.parallel_head = None
+        if config.use_parallel_decoder:
+            self.parallel_head = ParallelPredictionHead(config)
+
         self._init_weights()
     
     def _init_weights(self):
@@ -346,6 +406,25 @@ class TrajectoryTransformer(nn.Module):
         
         return x
     
+    def forward_parallel(self, src: torch.Tensor, src_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """
+        Parallel forward pass — identical code path for train and inference.
+
+        Encodes the history, then uses the parallel prediction head to
+        produce all future timesteps at once.
+
+        Args:
+            src: Source sequence (batch, src_len, input_dim)
+            src_mask: Optional source attention mask
+
+        Returns:
+            Predictions (batch, pred_horizon, output_dim)
+        """
+        if self.parallel_head is None:
+            raise RuntimeError("Parallel prediction head not enabled. Set use_parallel_decoder=True in config.")
+        encoder_output = self.encode(src, src_mask)
+        return self.parallel_head(encoder_output)
+
     def decode(
         self,
         tgt: torch.Tensor,
@@ -387,37 +466,45 @@ class TrajectoryTransformer(nn.Module):
         src_mask: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
         """
-        Auto-regressive prediction for inference.
-        
+        Prediction for inference.
+
+        If a parallel prediction head is available, uses it (single forward pass).
+        Otherwise falls back to autoregressive decoding.
+
         Args:
             src: Source sequence (batch, src_len, input_dim)
             pred_horizon: Number of future timesteps to predict
             src_mask: Source attention mask
-        
+
         Returns:
             Predictions (batch, pred_horizon, output_dim)
         """
+        # Use parallel head when available (no train/inference gap)
+        if self.parallel_head is not None:
+            return self.forward_parallel(src, src_mask)
+
+        # Fallback: autoregressive decoding
         batch_size = src.size(0)
         device = src.device
-        
+
         # Encode source
         encoder_output = self.encode(src, src_mask)
-        
+
         # Initialize decoder input with zeros (or last timestep)
         # Using zeros for simplicity; could use last known state
         decoder_input = torch.zeros(batch_size, 1, self.config.input_dim, device=device)
-        
+
         predictions = []
-        
+
         # Auto-regressive decoding
         for t in range(pred_horizon):
             # Decode one step
             output = self.decode(decoder_input, encoder_output, src_mask, None)
-            
+
             # Take last prediction
             pred = output[:, -1:, :]  # (batch, 1, output_dim)
             predictions.append(pred)
-            
+
             # Prepare next decoder input (use prediction as input)
             # For simplicity, pad prediction to input_dim
             if self.config.output_dim < self.config.input_dim:
@@ -425,13 +512,13 @@ class TrajectoryTransformer(nn.Module):
                 next_input[:, :, :self.config.output_dim] = pred
             else:
                 next_input = pred
-            
+
             # Append to decoder input
             decoder_input = torch.cat([decoder_input, next_input], dim=1)
-        
+
         # Concatenate all predictions
         predictions = torch.cat(predictions, dim=1)  # (batch, pred_horizon, output_dim)
-        
+
         return predictions
     
     def get_config(self) -> Dict:
@@ -444,7 +531,9 @@ class TrajectoryTransformer(nn.Module):
             'd_ff': self.config.d_ff,
             'dropout': self.config.dropout,
             'input_dim': self.config.input_dim,
-            'output_dim': self.config.output_dim
+            'output_dim': self.config.output_dim,
+            'pred_horizon': self.config.pred_horizon,
+            'use_parallel_decoder': self.config.use_parallel_decoder,
         }
     
     @classmethod
@@ -485,23 +574,38 @@ if __name__ == "__main__":
         input_dim=24,
         output_dim=6
     )
-    
+
     model = TrajectoryTransformer(config)
     print(f"Model created with {sum(p.numel() for p in model.parameters())} parameters")
-    
+
     # Test forward pass
     batch_size = 4
     src_len = 20
     tgt_len = 30
-    
+
     src = torch.randn(batch_size, src_len, config.input_dim)
     tgt = torch.randn(batch_size, tgt_len, config.input_dim)
-    
+
     output = model(src, tgt)
     print(f"Output shape: {output.shape}")  # Should be (4, 30, 6)
-    
-    # Test prediction
+
+    # Test prediction (autoregressive fallback)
     predictions = model.predict(src, pred_horizon=30)
-    print(f"Prediction shape: {predictions.shape}")  # Should be (4, 30, 6)
-    
+    print(f"Prediction shape (AR): {predictions.shape}")  # Should be (4, 30, 6)
+
+    # Test parallel prediction head
+    par_config = TransformerConfig(
+        d_model=64, n_heads=4, n_encoder_layers=2, n_decoder_layers=2,
+        d_ff=256, dropout=0.1, input_dim=24, output_dim=6,
+        pred_horizon=30, use_parallel_decoder=True,
+    )
+    par_model = TrajectoryTransformer(par_config)
+    print(f"\nParallel model: {sum(p.numel() for p in par_model.parameters())} parameters")
+
+    par_pred = par_model.forward_parallel(src)
+    print(f"forward_parallel shape: {par_pred.shape}")  # Should be (4, 30, 6)
+
+    par_pred2 = par_model.predict(src, pred_horizon=30)
+    print(f"predict() shape (parallel): {par_pred2.shape}")  # Should be (4, 30, 6)
+
     print("\n✅ Model test passed!")
