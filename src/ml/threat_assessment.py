@@ -99,7 +99,11 @@ class ThreatAssessmentPipeline:
     """
 
     # Delta-V classification thresholds (matches training script)
+    # Applied AFTER subtracting expected gravitational acceleration
     _DV_THRESHOLDS = [0.005, 0.01, 0.02, 0.1, 1.0]
+
+    # Earth gravitational parameter (km³/s²)
+    _MU_EARTH = 398600.4418
 
     def __init__(
         self,
@@ -261,12 +265,32 @@ class ThreatAssessmentPipeline:
         velocities: np.ndarray,
         timestamps: np.ndarray,
     ) -> Tuple[List[ManeuverRecord], List[ManeuverEvent]]:
-        """Derive maneuver events from velocity changes."""
+        """
+        Derive maneuver events from velocity changes.
+
+        Subtracts expected gravitational acceleration so that natural orbital
+        velocity direction changes (which can be 0.4+ km/s per 60s step for
+        LEO) are not misclassified as maneuvers. Only the residual delta-V
+        (actual thrust) is classified.
+        """
         if len(timestamps) < 2:
             return [], []
 
-        dv = np.diff(velocities, axis=0)
-        dv_mag = np.linalg.norm(dv, axis=1)
+        # Compute raw velocity differences
+        dv_raw = np.diff(velocities, axis=0)
+
+        # Subtract expected gravitational contribution at each step
+        # a_gravity = -mu * r / |r|^3, so expected dv = a * dt
+        dt = np.diff(timestamps)  # (T-1,)
+        r = positions[:-1]  # position at start of each interval
+        r_mag = np.linalg.norm(r, axis=1, keepdims=True)  # (T-1, 1)
+        r_mag = np.maximum(r_mag, 1.0)  # prevent division by zero
+        a_gravity = -self._MU_EARTH * r / (r_mag ** 3)  # (T-1, 3)
+        dv_gravity = a_gravity * dt[:, np.newaxis]  # (T-1, 3)
+
+        # Residual delta-V = actual maneuver thrust
+        dv_maneuver = dv_raw - dv_gravity
+        dv_mag = np.linalg.norm(dv_maneuver, axis=1)
 
         maneuver_records = []
         maneuver_events = []

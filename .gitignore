@@ -53,3 +53,8 @@ docker-compose.override.yml
 dist/
 build/
 *.egg-info/
+
+# Dashboard
+node_modules/
+src/dashboard/dist/
+*.db

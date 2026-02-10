@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --tier-minimal: #22c55e;
+  --tier-low: #84cc16;
+  --tier-moderate: #eab308;
+  --tier-elevated: #f97316;
+  --tier-critical: #ef4444;
+}
+
+/* Cesium overrides for dark theme */
+.cesium-viewer-bottom,
+.cesium-viewer-animationContainer,
+.cesium-viewer-timelineContainer,
+.cesium-viewer-fullscreenContainer {
+  display: none !important;
+}
+
+.cesium-widget canvas {
+  border-radius: 0;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* Pulsing animation for critical threats */
+@keyframes pulse-critical {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.pulse-critical {
+  animation: pulse-critical 1.5s ease-in-out infinite;
+}

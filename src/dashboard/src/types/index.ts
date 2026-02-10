@@ -1,0 +1,103 @@
+export type ThreatTier = 'MINIMAL' | 'LOW' | 'MODERATE' | 'ELEVATED' | 'CRITICAL';
+
+export interface SatellitePosition {
+  id: number;
+  name: string;
+  lat: number;
+  lon: number;
+  alt_km: number;
+  threat_tier: ThreatTier;
+}
+
+export interface ObjectSummary {
+  id: number;
+  name: string;
+  regime: string;
+  altitude_km: number;
+  speed_km_s: number;
+  threat_tier: ThreatTier;
+  threat_score: number;
+}
+
+export interface TrajectoryPoint {
+  timestep: number;
+  time_iso: string;
+  lat: number;
+  lon: number;
+  alt_km: number;
+  position_x: number;
+  position_y: number;
+  position_z: number;
+  velocity_x: number;
+  velocity_y: number;
+  velocity_z: number;
+}
+
+export interface ObjectDetail extends ObjectSummary {
+  trajectory: TrajectoryPoint[];
+}
+
+export interface ThreatAssessment {
+  object_id: number;
+  object_name: string;
+  threat_score: number;
+  threat_tier: ThreatTier;
+  intent_score: number;
+  anomaly_score: number;
+  proximity_score: number;
+  pattern_score: number;
+  maneuver_class: string;
+  maneuver_confidence: number;
+  contributing_factors: string[];
+  explanation: string;
+  latency_ms: number;
+}
+
+export interface ThreatSummary {
+  total: number;
+  by_tier: Record<string, number>;
+}
+
+export interface Alert {
+  id: number;
+  object_id: number;
+  object_name: string;
+  threat_tier: ThreatTier;
+  threat_score: number;
+  message: string;
+  timestamp: string;
+}
+
+export interface SimulationStatus {
+  is_playing: boolean;
+  speed: number;
+  timestep: number;
+  max_timestep: number;
+  time_iso: string;
+}
+
+export interface SystemMetrics {
+  objects_tracked: number;
+  websocket_connections: number;
+  api_requests: number;
+  avg_api_latency_ms: number;
+  assessments_completed: number;
+  uptime_seconds: number;
+}
+
+export interface WSMessage {
+  type: string;
+  timestep: number;
+  time_iso: string;
+  objects: SatellitePosition[];
+}
+
+export const TIER_COLORS: Record<ThreatTier, string> = {
+  MINIMAL: '#22c55e',
+  LOW: '#84cc16',
+  MODERATE: '#eab308',
+  ELEVATED: '#f97316',
+  CRITICAL: '#ef4444',
+};
+
+export const TIER_ORDER: ThreatTier[] = ['MINIMAL', 'LOW', 'MODERATE', 'ELEVATED', 'CRITICAL'];

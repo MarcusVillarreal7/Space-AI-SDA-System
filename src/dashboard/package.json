@@ -1,0 +1,32 @@
+{
+  "name": "space-ai-dashboard",
+  "private": true,
+  "version": "4.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n api,vite -c blue,green \"cd ../.. && PYTHONPATH=. venv/bin/uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir src/api\" \"vite\"",
+    "dev:frontend": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "cesium": "^1.119.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.13.0",
+    "resium": "^1.17.4",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.2.1",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.14",
+    "vite-plugin-cesium": "^1.2.23"
+  }
+}
