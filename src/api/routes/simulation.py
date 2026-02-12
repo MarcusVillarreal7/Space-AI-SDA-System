@@ -72,3 +72,36 @@ async def seek(timestep: int = Query(..., ge=0)):
         )
     clock.seek(timestep)
     return {"timestep": clock.timestep}
+
+
+@router.post("/reset")
+async def reset_simulation():
+    """Reset simulation to initial state: clock to 0, clear all assessments and alerts."""
+    from src.api.main import app_state
+    from src.api.database import clear_alerts, clear_assessment_cache
+
+    # Pause and seek to 0
+    clock = _get_clock()
+    clock.pause()
+    clock.seek(0)
+
+    # Clear threat tiers
+    app_state["threat_tiers"] = {}
+
+    # Clear threat service state
+    service = app_state.get("threat_service")
+    if service:
+        service._assessments.clear()
+        service._tier_counts = {
+            "MINIMAL": 0, "LOW": 0, "MODERATE": 0,
+            "ELEVATED": 0, "CRITICAL": 0,
+        }
+        service._assess_all_running = False
+        service._assess_all_completed = 0
+        service._assess_all_total = 0
+
+    # Clear database
+    clear_alerts()
+    clear_assessment_cache()
+
+    return {"status": "reset", "timestep": 0}

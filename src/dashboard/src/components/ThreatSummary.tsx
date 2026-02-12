@@ -20,6 +20,19 @@ export function ThreatSummary() {
     }
   }, [setAssessAllStatus]);
 
+  const handleReset = useCallback(async () => {
+    try {
+      await api.resetSimulation();
+      setAlerts([]);
+      setAssessAllStatus(null);
+      // Refresh threat summary to show cleared tiers
+      const newSummary = await api.getThreatSummary();
+      setThreatSummary(newSummary);
+    } catch (e) {
+      console.error('Failed to reset:', e);
+    }
+  }, [setAlerts, setAssessAllStatus, setThreatSummary]);
+
   // Poll for progress when running
   useEffect(() => {
     if (!assessAllStatus?.running) {
@@ -95,7 +108,7 @@ export function ThreatSummary() {
       </div>
 
       {/* Assess-all button + progress */}
-      <div className="mt-4">
+      <div className="mt-4 space-y-2">
         {isRunning ? (
           <div>
             <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
@@ -110,12 +123,20 @@ export function ThreatSummary() {
             </div>
           </div>
         ) : (
-          <button
-            onClick={handleAssessAll}
-            className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded transition-colors"
-          >
-            Run Full Assessment
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleAssessAll}
+              className="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded transition-colors"
+            >
+              Run Full Assessment
+            </button>
+            <button
+              onClick={handleReset}
+              className="py-2 px-3 bg-space-700 hover:bg-space-600 text-slate-400 hover:text-slate-200 text-xs font-medium rounded transition-colors"
+            >
+              Reset
+            </button>
+          </div>
         )}
       </div>
     </div>

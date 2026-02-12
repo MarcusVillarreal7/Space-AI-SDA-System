@@ -48,6 +48,7 @@ export const api = {
   pause: () => postJSON('/simulation/pause'),
   setSpeed: (speed: number) => postJSON('/simulation/speed', { speed }),
   seek: (timestep: number) => postJSON('/simulation/seek', { timestep }),
+  resetSimulation: () => postJSON<{ status: string; timestep: number }>('/simulation/reset'),
 
   getThreatSummary: () => fetchJSON<ThreatSummary>('/threat/summary'),
   assessObject: (id: number) => fetchJSON<ThreatAssessment>(`/threat/object/${id}`),
