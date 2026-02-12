@@ -52,6 +52,11 @@ export const api = {
   getThreatSummary: () => fetchJSON<ThreatSummary>('/threat/summary'),
   assessObject: (id: number) => fetchJSON<ThreatAssessment>(`/threat/object/${id}`),
   getAlerts: (limit = 50) => fetchJSON<Alert[]>(`/threat/alerts?limit=${limit}`),
+  clearAlerts: async () => {
+    const res = await fetch(`${BASE}/threat/alerts`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
+    return res.json() as Promise<{ deleted: number }>;
+  },
   predictTrajectory: (id: number) => fetchJSON<TrajectoryPrediction>(`/threat/object/${id}/prediction`),
   assessAll: () => postJSON<AssessAllStatus>('/threat/assess-all'),
   assessAllStatus: () => fetchJSON<AssessAllStatus>('/threat/assess-all/status'),

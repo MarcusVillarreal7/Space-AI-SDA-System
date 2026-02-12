@@ -66,8 +66,11 @@ async def lifespan(app: FastAPI):
     conjunction_service = ConjunctionService(run_interval=10)
     app_state["conjunction_service"] = conjunction_service
 
-    # Initialize database
+    # Initialize database and clear stale data from previous runs
     init_db()
+    from src.api.database import clear_alerts, clear_assessment_cache
+    clear_alerts()
+    clear_assessment_cache()
 
     # Track metrics
     app_state["metrics"] = {

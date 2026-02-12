@@ -114,6 +114,26 @@ def get_alerts(limit: int = 50, offset: int = 0) -> list[dict]:
     return result
 
 
+def clear_alerts() -> int:
+    """Delete all alerts. Returns number of deleted rows."""
+    session = get_session()
+    count = session.query(Alert).delete()
+    session.commit()
+    session.close()
+    logger.info("Cleared %d alerts from database", count)
+    return count
+
+
+def clear_assessment_cache() -> int:
+    """Delete all cached assessments. Returns number of deleted rows."""
+    session = get_session()
+    count = session.query(AssessmentCache).delete()
+    session.commit()
+    session.close()
+    logger.info("Cleared %d cached assessments from database", count)
+    return count
+
+
 def cache_assessment(object_id: int, timestep: int, result: dict) -> None:
     """Cache a threat assessment result."""
     session = get_session()

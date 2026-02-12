@@ -1,16 +1,33 @@
 import { useSimStore } from '../store/useSimStore';
 import { TierBadge } from './TierBadge';
+import { api } from '../services/api';
 
 export function AlertFeed() {
   const alerts = useSimStore((s) => s.alerts);
+  const setAlerts = useSimStore((s) => s.setAlerts);
   const selectObject = useSimStore((s) => s.selectObject);
+
+  const handleClear = async () => {
+    await api.clearAlerts();
+    setAlerts([]);
+  };
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <h3 className="text-sm font-semibold text-slate-300 px-4 py-3 shrink-0">
-        Alert Feed
-        <span className="text-slate-500 font-normal ml-2">{alerts.length}</span>
-      </h3>
+      <div className="flex items-center justify-between px-4 py-3 shrink-0">
+        <h3 className="text-sm font-semibold text-slate-300">
+          Alert Feed
+          <span className="text-slate-500 font-normal ml-2">{alerts.length}</span>
+        </h3>
+        {alerts.length > 0 && (
+          <button
+            onClick={handleClear}
+            className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+          >
+            Clear
+          </button>
+        )}
+      </div>
       <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
         {alerts.length === 0 ? (
           <p className="text-xs text-slate-500">No alerts yet. Threat assessments generate alerts for ELEVATED and CRITICAL objects.</p>

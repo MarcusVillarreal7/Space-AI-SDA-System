@@ -141,3 +141,11 @@ async def get_alerts(
     from src.api.database import get_alerts
     alerts = get_alerts(limit=limit, offset=offset)
     return [AlertResponse(**a) for a in alerts]
+
+
+@router.delete("/alerts")
+async def delete_alerts():
+    """Clear all alerts from the database."""
+    from src.api.database import clear_alerts
+    count = clear_alerts()
+    return {"deleted": count}
