@@ -1,8 +1,57 @@
+import { useCallback, useEffect, useRef } from 'react';
 import { useSimStore } from '../store/useSimStore';
+import { api } from '../services/api';
 import { TIER_COLORS, TIER_ORDER } from '../types';
 
 export function ThreatSummary() {
   const summary = useSimStore((s) => s.threatSummary);
+  const setThreatSummary = useSimStore((s) => s.setThreatSummary);
+  const assessAllStatus = useSimStore((s) => s.assessAllStatus);
+  const setAssessAllStatus = useSimStore((s) => s.setAssessAllStatus);
+  const setAlerts = useSimStore((s) => s.setAlerts);
+  const pollRef = useRef<ReturnType<typeof setInterval>>();
+
+  const handleAssessAll = useCallback(async () => {
+    try {
+      const status = await api.assessAll();
+      setAssessAllStatus(status);
+    } catch (e) {
+      console.error('Failed to start assess-all:', e);
+    }
+  }, [setAssessAllStatus]);
+
+  // Poll for progress when running
+  useEffect(() => {
+    if (!assessAllStatus?.running) {
+      if (pollRef.current) clearInterval(pollRef.current);
+      return;
+    }
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const status = await api.assessAllStatus();
+        setAssessAllStatus(status);
+
+        // Refresh threat summary and alerts while running
+        const [newSummary, alerts] = await Promise.all([
+          api.getThreatSummary(),
+          api.getAlerts(50),
+        ]);
+        setThreatSummary(newSummary);
+        setAlerts(alerts);
+
+        if (!status.running) {
+          clearInterval(pollRef.current);
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }, 2000);
+
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [assessAllStatus?.running, setAssessAllStatus, setThreatSummary, setAlerts]);
 
   if (!summary) {
     return (
@@ -14,6 +63,10 @@ export function ThreatSummary() {
   }
 
   const total = summary.total || 1;
+  const isRunning = assessAllStatus?.running ?? false;
+  const completed = assessAllStatus?.completed ?? 0;
+  const assessTotal = assessAllStatus?.total ?? 0;
+  const progressPct = assessTotal > 0 ? (completed / assessTotal) * 100 : 0;
 
   return (
     <div className="p-4 border-b border-space-700">
@@ -39,6 +92,31 @@ export function ThreatSummary() {
             </div>
           );
         })}
+      </div>
+
+      {/* Assess-all button + progress */}
+      <div className="mt-4">
+        {isRunning ? (
+          <div>
+            <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+              <span>Assessing all objects...</span>
+              <span>{completed}/{assessTotal}</span>
+            </div>
+            <div className="h-2 bg-space-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={handleAssessAll}
+            className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded transition-colors"
+          >
+            Run Full Assessment
+          </button>
+        )}
       </div>
     </div>
   );

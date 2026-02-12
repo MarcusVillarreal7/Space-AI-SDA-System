@@ -3,6 +3,8 @@ import type {
   SatellitePosition,
   ThreatAssessment,
   ThreatSummary,
+  TrajectoryPrediction,
+  AssessAllStatus,
   Alert,
   ThreatTier,
 } from '../types';
@@ -22,7 +24,11 @@ interface SimState {
   // Threat
   threatSummary: ThreatSummary | null;
   selectedAssessment: ThreatAssessment | null;
+  selectedPrediction: TrajectoryPrediction | null;
   alerts: Alert[];
+
+  // Assess-all progress
+  assessAllStatus: AssessAllStatus | null;
 
   // UI
   isConnected: boolean;
@@ -35,8 +41,10 @@ interface SimState {
   selectObject: (id: number | null) => void;
   setThreatSummary: (summary: ThreatSummary) => void;
   setSelectedAssessment: (assessment: ThreatAssessment | null) => void;
+  setSelectedPrediction: (prediction: TrajectoryPrediction | null) => void;
   setAlerts: (alerts: Alert[]) => void;
   addAlert: (alert: Alert) => void;
+  setAssessAllStatus: (status: AssessAllStatus | null) => void;
   setConnected: (connected: boolean) => void;
   setLoading: (loading: boolean) => void;
   setBottomTab: (tab: string) => void;
@@ -54,7 +62,9 @@ export const useSimStore = create<SimState>((set) => ({
   selectedObjectId: null,
   threatSummary: null,
   selectedAssessment: null,
+  selectedPrediction: null,
   alerts: [],
+  assessAllStatus: null,
   isConnected: false,
   isLoading: true,
   bottomTab: 'tracking',
@@ -65,16 +75,20 @@ export const useSimStore = create<SimState>((set) => ({
   updatePositions: (timestep, timeIso, objects) =>
     set({ timestep, timeIso, objects, isLoading: false }),
 
-  selectObject: (id) => set({ selectedObjectId: id, selectedAssessment: null }),
+  selectObject: (id) => set({ selectedObjectId: id, selectedAssessment: null, selectedPrediction: null }),
 
   setThreatSummary: (summary) => set({ threatSummary: summary }),
 
   setSelectedAssessment: (assessment) => set({ selectedAssessment: assessment }),
 
+  setSelectedPrediction: (prediction) => set({ selectedPrediction: prediction }),
+
   setAlerts: (alerts) => set({ alerts }),
 
   addAlert: (alert) =>
     set((state) => ({ alerts: [alert, ...state.alerts].slice(0, 100) })),
+
+  setAssessAllStatus: (status) => set({ assessAllStatus: status }),
 
   setConnected: (connected) => set({ isConnected: connected }),
 

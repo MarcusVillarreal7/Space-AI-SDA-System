@@ -1,14 +1,23 @@
 """
-Threat assessment endpoints — summary, per-object assessment, alerts.
+Threat assessment endpoints — summary, per-object assessment, alerts,
+trajectory prediction, conjunction analysis, and full assess-all.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 
-from src.api.models import AlertResponse, ThreatAssessmentResponse, ThreatSummaryResponse
+from src.api.models import (
+    AlertResponse,
+    AssessAllStatus,
+    ConjunctionResponse,
+    ThreatAssessmentResponse,
+    ThreatSummaryResponse,
+    TrajectoryPredictionResponse,
+)
 
 router = APIRouter(prefix="/api/threat", tags=["threat"])
 logger = logging.getLogger(__name__)
@@ -58,6 +67,9 @@ async def assess_object(object_id: int):
         positions[-window:],
         velocities[-window:],
         timestamps[-window:],
+        full_positions=positions,
+        full_velocities=velocities,
+        full_timestamps=timestamps,
     )
 
     # Add object name
@@ -70,6 +82,54 @@ async def assess_object(object_id: int):
     )
 
     return ThreatAssessmentResponse(**result)
+
+
+@router.get("/object/{object_id}/prediction", response_model=TrajectoryPredictionResponse)
+async def predict_trajectory(object_id: int):
+    """Predict 30-step future trajectory for a specific object using the TrajectoryTransformer."""
+    catalog = _get_catalog()
+    service = _get_threat_service()
+
+    result = service.predict_trajectory(object_id, catalog)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Prediction unavailable for object {object_id}")
+
+    return TrajectoryPredictionResponse(**result)
+
+
+@router.post("/assess-all", response_model=AssessAllStatus)
+async def assess_all():
+    """Start full assessment of all objects in background."""
+    catalog = _get_catalog()
+    service = _get_threat_service()
+    from src.api.main import app_state
+    clock = app_state.get("clock")
+    timestep = clock.timestep if clock else 0
+
+    status = service.get_assess_all_status()
+    if status["running"]:
+        return AssessAllStatus(**status)
+
+    asyncio.create_task(service.assess_all(catalog, timestep))
+    # Return immediate status
+    return AssessAllStatus(running=True, completed=0, total=catalog.n_objects)
+
+
+@router.get("/assess-all/status", response_model=AssessAllStatus)
+async def assess_all_status():
+    """Get progress of the running assess-all operation."""
+    service = _get_threat_service()
+    return AssessAllStatus(**service.get_assess_all_status())
+
+
+@router.get("/conjunctions", response_model=ConjunctionResponse)
+async def get_conjunctions():
+    """Get current top conjunction (collision) risks."""
+    from src.api.main import app_state
+    conj_service = app_state.get("conjunction_service")
+    if conj_service is None:
+        return ConjunctionResponse(pairs=[], analyzed_pairs=0, timestamp="")
+    return ConjunctionResponse(**conj_service.get_results())
 
 
 @router.get("/alerts", response_model=list[AlertResponse])

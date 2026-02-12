@@ -85,13 +85,16 @@ def _make_approaching_iss_track(n_timesteps=100, dt=60.0, seed=42):
 
 
 def _make_geo_track(n_timesteps=100, dt=60.0, seed=42):
-    """Generate a GEO satellite track."""
+    """Generate a GEO satellite track at 45° longitude (away from any asset)."""
     rng = np.random.RandomState(seed)
     r = 42164.0  # GEO radius km
     omega = 3.07 / r
 
     timestamps = np.arange(n_timesteps) * dt
-    theta = omega * timestamps
+    # Start at 45° longitude — far from all asset positions
+    # (assets are at 0°, 90°, 180°, 270°)
+    theta0 = np.pi / 4.0
+    theta = theta0 + omega * timestamps
 
     positions = np.column_stack([
         r * np.cos(theta) + rng.randn(n_timesteps) * 0.01,

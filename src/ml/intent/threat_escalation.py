@@ -121,21 +121,21 @@ class ThreatEscalator:
 
     def is_evasive_pattern(self, history: List[ManeuverEvent]) -> bool:
         """
-        Detect evasion: a maneuver that occurs shortly after a period
-        of normal behavior, suggesting a response to being observed.
+        Detect evasion: a sudden significant maneuver after a prolonged
+        period of normal behavior, suggesting a response to being observed.
 
-        Heuristic: a major maneuver preceded by a long stretch of normal-only
-        behavior (≥5 consecutive normal events then sudden maneuver).
+        Scans the full history for any class 3/4/5 event preceded by ≥5
+        consecutive normal events.
         """
         if len(history) < 6:
             return False
 
-        last = history[-1]
-        if last.maneuver_class not in {3, 4}:  # Must end with a maneuver
-            return False
-
-        preceding = history[-6:-1]
-        return all(e.maneuver_class == 0 for e in preceding)
+        for i in range(5, len(history)):
+            if history[i].maneuver_class in {3, 4, 5}:
+                preceding = history[i - 5:i]
+                if all(e.maneuver_class == 0 for e in preceding):
+                    return True
+        return False
 
 
 def _recent_events(

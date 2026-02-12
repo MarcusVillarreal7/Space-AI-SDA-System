@@ -1,18 +1,20 @@
 import { useRef, useEffect, useMemo, useCallback } from 'react';
-import { Viewer, Entity } from 'resium';
+import { Viewer, Entity, PolylineGraphics } from 'resium';
 import {
   Viewer as CesiumViewer,
   Cartesian2,
   Cartesian3,
   Color,
   Ion,
-  ImageryLayer,
   NearFarScalar,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   TileMapServiceImageryProvider,
   buildModuleUrl,
   defined,
+  CallbackProperty,
+  MaterialProperty,
+  PolylineDashMaterialProperty,
 } from 'cesium';
 import { useSimStore } from '../store/useSimStore';
 import { TIER_COLORS } from '../types';
@@ -26,6 +28,8 @@ function tierToColor(tier: ThreatTier): Color {
   return Color.fromCssColorString(hex);
 }
 
+const PULSE_TIERS = new Set<ThreatTier>(['CRITICAL', 'ELEVATED']);
+
 export function Globe() {
   const viewerRef = useRef<CesiumViewer | null>(null);
   const handlerRef = useRef<ScreenSpaceEventHandler | null>(null);
@@ -33,18 +37,35 @@ export function Globe() {
   const objects = useSimStore((s) => s.objects);
   const selectObject = useSimStore((s) => s.selectObject);
   const selectedObjectId = useSimStore((s) => s.selectedObjectId);
+  const prediction = useSimStore((s) => s.selectedPrediction);
 
   // Build point data
   const pointData = useMemo(() => {
-    return objects.map((obj) => ({
-      id: obj.id,
-      name: obj.name,
-      position: Cartesian3.fromDegrees(obj.lon, obj.lat, obj.alt_km * 1000),
-      color: tierToColor(obj.threat_tier),
-      tier: obj.threat_tier,
-      pixelSize: obj.id === selectedObjectId ? 8 : 4,
-    }));
+    return objects.map((obj) => {
+      const shouldPulse = PULSE_TIERS.has(obj.threat_tier);
+      return {
+        id: obj.id,
+        name: obj.name,
+        position: Cartesian3.fromDegrees(obj.lon, obj.lat, obj.alt_km * 1000),
+        color: tierToColor(obj.threat_tier),
+        tier: obj.threat_tier,
+        pixelSize: obj.id === selectedObjectId ? 8 : shouldPulse ? 6 : 4,
+        shouldPulse,
+      };
+    });
   }, [objects, selectedObjectId]);
+
+  // Build predicted trajectory polyline positions
+  const predictionPositions = useMemo(() => {
+    if (!prediction || prediction.object_id !== selectedObjectId || !prediction.points.length) {
+      return null;
+    }
+    const coords: number[] = [];
+    for (const pt of prediction.points) {
+      coords.push(pt.lon, pt.lat, pt.alt_km * 1000);
+    }
+    return Cartesian3.fromDegreesArrayHeights(coords);
+  }, [prediction, selectedObjectId]);
 
   // Set up click handler on the Cesium viewer
   const setupClickHandler = useCallback(
@@ -138,16 +159,35 @@ export function Globe() {
             key={pt.id}
             position={pt.position}
             point={{
-              pixelSize: pt.pixelSize,
+              pixelSize: pt.shouldPulse
+                ? new CallbackProperty(() => {
+                    const t = Date.now() / 500;
+                    return pt.id === selectedObjectId ? 8 + Math.sin(t) * 3 : 5 + Math.sin(t) * 2;
+                  }, false) as any
+                : pt.pixelSize,
               color: pt.color,
-              outlineColor: pt.id === selectedObjectId ? Color.WHITE : Color.TRANSPARENT,
-              outlineWidth: pt.id === selectedObjectId ? 2 : 0,
+              outlineColor: pt.id === selectedObjectId ? Color.WHITE : pt.shouldPulse ? pt.color.withAlpha(0.4) : Color.TRANSPARENT,
+              outlineWidth: pt.id === selectedObjectId ? 2 : pt.shouldPulse ? 3 : 0,
               scaleByDistance: new NearFarScalar(1e6, 1.5, 1e8, 0.5),
             }}
             name={pt.name}
             description={`ID: ${pt.id} | Tier: ${pt.tier}`}
           />
         ))}
+
+        {/* Predicted trajectory polyline for selected object */}
+        {predictionPositions && (
+          <Entity>
+            <PolylineGraphics
+              positions={predictionPositions}
+              width={2}
+              material={new PolylineDashMaterialProperty({
+                color: Color.CYAN.withAlpha(0.7),
+                dashLength: 16,
+              }) as unknown as MaterialProperty}
+            />
+          </Entity>
+        )}
       </Viewer>
     </div>
   );

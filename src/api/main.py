@@ -41,6 +41,13 @@ async def lifespan(app: FastAPI):
     # Load space catalog
     catalog = SpaceCatalog()
     catalog.load(DATA_PATH)
+
+    # Inject threat scenarios (modifies objects 990-996)
+    from src.api.scenario_injector import ScenarioInjector
+    injector = ScenarioInjector()
+    injected = injector.inject(catalog)
+    logger.info("Injected %d threat scenarios", len(injected))
+
     app_state["catalog"] = catalog
 
     # Initialize simulation clock
@@ -53,6 +60,11 @@ async def lifespan(app: FastAPI):
     # Initialize threat service
     threat_service = ThreatService()
     app_state["threat_service"] = threat_service
+
+    # Initialize conjunction service
+    from src.api.conjunction_service import ConjunctionService
+    conjunction_service = ConjunctionService(run_interval=10)
+    app_state["conjunction_service"] = conjunction_service
 
     # Initialize database
     init_db()
@@ -68,6 +80,9 @@ async def lifespan(app: FastAPI):
     # Register WebSocket broadcast callback
     from src.api.routes.websocket import broadcast_positions
     clock.on_tick(broadcast_positions)
+
+    # Register conjunction analysis callback
+    clock.on_tick(conjunction_service.on_tick)
 
     # Start clock
     await clock.start()

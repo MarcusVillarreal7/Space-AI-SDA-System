@@ -48,6 +48,7 @@ export interface ThreatAssessment {
   pattern_score: number;
   maneuver_class: string;
   maneuver_confidence: number;
+  maneuver_probabilities: number[] | null;
   contributing_factors: string[];
   explanation: string;
   latency_ms: number;
@@ -83,6 +84,40 @@ export interface SystemMetrics {
   avg_api_latency_ms: number;
   assessments_completed: number;
   uptime_seconds: number;
+}
+
+export interface PredictedPoint {
+  step: number;
+  lat: number;
+  lon: number;
+  alt_km: number;
+  position_x: number;
+  position_y: number;
+  position_z: number;
+}
+
+export interface TrajectoryPrediction {
+  object_id: number;
+  object_name: string;
+  points: PredictedPoint[];
+  model: string;
+  latency_ms: number;
+}
+
+export interface AssessAllStatus {
+  running: boolean;
+  completed: number;
+  total: number;
+}
+
+export interface ConjunctionPair {
+  object1_id: number;
+  object1_name: string;
+  object2_id: number;
+  object2_name: string;
+  risk_score: number;
+  miss_distance_km: number;
+  time_to_closest_approach_s: number;
 }
 
 export interface WSMessage {

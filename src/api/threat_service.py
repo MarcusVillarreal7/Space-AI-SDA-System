@@ -1,14 +1,17 @@
 """
 ThreatService — Wraps ThreatAssessmentPipeline for dashboard use.
 
-Provides on-demand assessment, tier summary, and rotating batch assessment.
-Caches results to avoid redundant computation.
+Provides on-demand assessment, tier summary, rotating batch assessment,
+trajectory prediction, and full assess-all with progress tracking.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import math
 import time
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
@@ -16,6 +19,29 @@ import numpy as np
 from src.api.database import cache_assessment, get_cached_assessment, store_alert
 
 logger = logging.getLogger(__name__)
+
+# WGS84 ellipsoid parameters (for ECI → geodetic conversion)
+_WGS84_A = 6378.137
+_WGS84_F = 1 / 298.257223563
+_WGS84_E2 = 2 * _WGS84_F - _WGS84_F ** 2
+
+
+def _eci_to_geodetic(x: float, y: float, z: float) -> tuple[float, float, float]:
+    """Convert single ECI position (km) to lat/lon/alt (deg, deg, km)."""
+    # Approximate: assume GMST=0 (static snapshot)
+    lon = math.degrees(math.atan2(y, x))
+    p = math.sqrt(x ** 2 + y ** 2)
+    lat = math.atan2(z, p * (1 - _WGS84_E2))
+    for _ in range(5):
+        N = _WGS84_A / math.sqrt(1 - _WGS84_E2 * math.sin(lat) ** 2)
+        lat = math.atan2(z + _WGS84_E2 * N * math.sin(lat), p)
+    N = _WGS84_A / math.sqrt(1 - _WGS84_E2 * math.sin(lat) ** 2)
+    cos_lat = math.cos(lat)
+    if abs(cos_lat) > 1e-10:
+        alt = p / cos_lat - N
+    else:
+        alt = abs(z) - N * (1 - _WGS84_E2)
+    return math.degrees(lat), lon, alt
 
 
 class ThreatService:
@@ -29,12 +55,18 @@ class ThreatService:
     def __init__(self):
         self._pipeline = None
         self._pipeline_loaded = False
+        self._trajectory_predictor = None
+        self._trajectory_loaded = False
         self._tier_counts: dict[str, int] = {
             "MINIMAL": 0, "LOW": 0, "MODERATE": 0,
             "ELEVATED": 0, "CRITICAL": 0,
         }
         self._assessments: dict[int, dict] = {}  # object_id -> latest assessment
         self._batch_index: int = 0  # For rotating batch assessment
+        # Assess-all progress
+        self._assess_all_running = False
+        self._assess_all_completed = 0
+        self._assess_all_total = 0
 
     def _load_pipeline(self) -> None:
         """Lazy-load the threat assessment pipeline."""
@@ -44,6 +76,7 @@ class ThreatService:
             from src.ml.threat_assessment import ThreatAssessmentPipeline
             self._pipeline = ThreatAssessmentPipeline(
                 anomaly_checkpoint="checkpoints/phase3_anomaly",
+                maneuver_checkpoint="checkpoints/phase3_day4/maneuver_classifier.pt",
                 device="cpu",  # CPU for dashboard responsiveness
             )
             self._pipeline_loaded = True
@@ -61,6 +94,9 @@ class ThreatService:
         timestamps: np.ndarray,
         timestep: int = 0,
         use_cache: bool = True,
+        full_positions: Optional[np.ndarray] = None,
+        full_velocities: Optional[np.ndarray] = None,
+        full_timestamps: Optional[np.ndarray] = None,
     ) -> dict:
         """
         Assess a single object, with optional caching.
@@ -90,6 +126,9 @@ class ThreatService:
             positions=positions,
             velocities=velocities,
             timestamps=timestamps,
+            full_positions=full_positions,
+            full_velocities=full_velocities,
+            full_timestamps=full_timestamps,
         )
 
         result = {
@@ -102,6 +141,7 @@ class ThreatService:
             "pattern_score": round(assessment.threat_score.pattern_score, 2),
             "maneuver_class": assessment.maneuver_name,
             "maneuver_confidence": round(assessment.maneuver_confidence, 3),
+            "maneuver_probabilities": assessment.maneuver_probabilities,
             "contributing_factors": assessment.threat_score.contributing_factors,
             "explanation": assessment.threat_score.explanation,
             "latency_ms": round(assessment.latency_ms, 2),
@@ -161,7 +201,8 @@ class ThreatService:
                 continue
             positions, velocities, ts = data
 
-            # Use a window of recent observations for assessment
+            # Use a window of recent observations for classification,
+            # but pass the full trajectory for proximity scanning.
             window = min(20, len(ts))
             result = self.assess_object(
                 oid,
@@ -169,6 +210,9 @@ class ThreatService:
                 velocities[-window:],
                 ts[-window:],
                 timestep=timestep,
+                full_positions=positions,
+                full_velocities=velocities,
+                full_timestamps=ts,
             )
             results.append(result)
 
@@ -209,6 +253,140 @@ class ThreatService:
             for oid, a in self._assessments.items()
         }
 
+    def _load_trajectory_predictor(self) -> None:
+        """Lazy-load the TrajectoryTransformer predictor."""
+        if self._trajectory_loaded:
+            return
+        self._trajectory_loaded = True
+        ckpt = Path("checkpoints/phase3_parallel/best_model.pt")
+        if not ckpt.exists():
+            logger.warning("Trajectory checkpoint not found: %s", ckpt)
+            return
+        try:
+            from src.ml.inference import TrajectoryPredictor
+            self._trajectory_predictor = TrajectoryPredictor(
+                str(ckpt), device="cpu"
+            )
+            logger.info("TrajectoryPredictor loaded")
+        except Exception:
+            logger.exception("Failed to load TrajectoryPredictor")
+
+    def predict_trajectory(self, object_id: int, catalog) -> Optional[dict]:
+        """
+        Predict 30-step future trajectory for an object.
+
+        Returns dict with 'points' list of {step, lat, lon, alt_km, position_x/y/z}.
+        """
+        self._load_trajectory_predictor()
+        if self._trajectory_predictor is None:
+            return None
+
+        data = catalog.get_positions_and_velocities(object_id)
+        if data is None:
+            return None
+
+        positions, velocities, timestamps = data
+        window = min(20, len(timestamps))
+
+        t0 = time.perf_counter()
+        pred = self._trajectory_predictor.predict(
+            positions[-window:], velocities[-window:], timestamps[-window:],
+            pred_horizon=30,
+        )
+        latency = (time.perf_counter() - t0) * 1000.0
+
+        points = []
+        for i in range(pred["positions"].shape[0]):
+            px, py, pz = float(pred["positions"][i, 0]), float(pred["positions"][i, 1]), float(pred["positions"][i, 2])
+            lat, lon, alt = _eci_to_geodetic(px, py, pz)
+            points.append({
+                "step": i,
+                "lat": round(lat, 4),
+                "lon": round(lon, 4),
+                "alt_km": round(alt, 2),
+                "position_x": round(px, 3),
+                "position_y": round(py, 3),
+                "position_z": round(pz, 3),
+            })
+
+        idx = catalog.get_object_index(object_id)
+        name = catalog.object_names[idx] if idx is not None else f"Object-{object_id}"
+
+        return {
+            "object_id": object_id,
+            "object_name": name,
+            "points": points,
+            "model": "TrajectoryTransformer",
+            "latency_ms": round(latency, 2),
+        }
+
+    async def assess_all(self, catalog, timestep: int) -> None:
+        """
+        Assess all objects in background batches of 50.
+        Updates progress state and syncs tiers live.
+        """
+        if self._assess_all_running:
+            return
+        self._assess_all_running = True
+        self._assess_all_completed = 0
+        self._assess_all_total = catalog.n_objects
+
+        try:
+            object_ids = catalog.object_ids
+            batch_size = 50
+            for start in range(0, len(object_ids), batch_size):
+                batch = object_ids[start:start + batch_size]
+                for oid in batch:
+                    oid = int(oid)
+                    data = catalog.get_positions_and_velocities(oid)
+                    if data is None:
+                        self._assess_all_completed += 1
+                        continue
+                    positions, velocities, ts = data
+                    window = min(20, len(ts))
+                    result = self.assess_object(
+                        oid,
+                        positions[-window:],
+                        velocities[-window:],
+                        ts[-window:],
+                        timestep=timestep,
+                        use_cache=False,
+                        full_positions=positions,
+                        full_velocities=velocities,
+                        full_timestamps=ts,
+                    )
+                    self._assess_all_completed += 1
+
+                    # Generate alert for elevated/critical
+                    tier = result["threat_tier"]
+                    if tier in ("ELEVATED", "CRITICAL"):
+                        idx = catalog.get_object_index(oid)
+                        obj_name = catalog.object_names[idx] if idx is not None else f"Object-{oid}"
+                        explanation = result.get("explanation", "")
+                        msg = f"{obj_name}: {explanation}" if explanation else f"{obj_name} assessed as {tier}"
+                        store_alert(
+                            object_id=oid,
+                            object_name=obj_name,
+                            threat_tier=tier,
+                            threat_score=result["threat_score"],
+                            message=msg,
+                        )
+
+                # Yield to event loop between batches
+                await asyncio.sleep(0)
+        finally:
+            self._assess_all_running = False
+            logger.info("Assess-all complete: %d/%d objects",
+                        self._assess_all_completed, self._assess_all_total)
+
+    def get_assess_all_status(self) -> dict:
+        """Get progress of assess-all operation."""
+        return {
+            "running": self._assess_all_running,
+            "completed": self._assess_all_completed,
+            "total": self._assess_all_total,
+        }
+
     @staticmethod
     def _sync_tier(object_id: int, tier: str) -> None:
         """Push assessed tier into app_state so broadcasts and REST endpoints see it."""
@@ -232,6 +410,7 @@ class ThreatService:
             "pattern_score": 0.0,
             "maneuver_class": "Normal",
             "maneuver_confidence": 0.5,
+            "maneuver_probabilities": None,
             "contributing_factors": [],
             "explanation": "No assessment pipeline available",
             "latency_ms": 0.0,

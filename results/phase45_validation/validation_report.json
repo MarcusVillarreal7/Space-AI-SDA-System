@@ -1,0 +1,146 @@
+{
+  "timestamp": "2026-02-11T18:26:26",
+  "checks": {
+    "checkpoints": {
+      "maneuver_classifier": true,
+      "trajectory_transformer": true,
+      "behavior_autoencoder": true,
+      "collision_predictor": true
+    },
+    "features": {
+      "dimension": 24,
+      "has_nan": false,
+      "has_inf": false
+    },
+    "maneuver_inference": {
+      "class_idx": 1,
+      "class_name": "Drift/Decay",
+      "confidence": 0.9917739033699036,
+      "probabilities": [
+        0.005158217623829842,
+        0.9917739033699036,
+        3.940925580536714e-06,
+        0.0022021601907908916,
+        0.0008561598369851708,
+        5.6405515351798385e-06
+      ]
+    },
+    "trajectory_inference": {
+      "shape": [
+        30,
+        3
+      ],
+      "radius_range": [
+        0.114377960562706,
+        0.11458801478147507
+      ],
+      "latency_ms": 4.54
+    },
+    "collision_inference": {
+      "risk": 0.1566,
+      "ttca": 1.94,
+      "miss_distance": 0.88
+    },
+    "normal_objects": {
+      "total": 990,
+      "tier_distribution": {
+        "LOW": 582,
+        "MINIMAL": 361,
+        "MODERATE": 38,
+        "ELEVATED": 8,
+        "CRITICAL": 1
+      },
+      "pct_minimal_low": 95.3,
+      "false_elevated": 9
+    }
+  },
+  "summary": {
+    "passed": 54,
+    "warned": 3,
+    "failed": 0,
+    "total_time_s": 8.61,
+    "mean_latency_ms": 7.04,
+    "p95_latency_ms": 7.53,
+    "neural_classifier_used": 1000,
+    "scenarios_triggered": 7,
+    "tier_distribution": {
+      "LOW": 585,
+      "MINIMAL": 361,
+      "MODERATE": 38,
+      "ELEVATED": 15,
+      "CRITICAL": 1
+    }
+  },
+  "scenarios": {
+    "990": {
+      "name": "COSMOS-2558",
+      "expected_tier": "CRITICAL",
+      "actual_tier": "ELEVATED",
+      "threat_score": 67.55,
+      "maneuver_class": "Deorbit",
+      "maneuver_confidence": 1.0,
+      "explanation": "Object 990: Threat score 67.6/100 (ELEVATED).\nAlert operations team for assessment.\nSub-scores: intent=90, anomaly=100, proximity=20, pattern=40.\n- Intent: RENDEZVOUS at ELEVATED (confidence 100%)\n- Anomaly: score 7.1043 (P100, threshold 0.1291)\n- Proximity: 493 km from International Space Station, closing at 0.29 km/s\n- Patterns: PHASING",
+      "triggered": true
+    },
+    "991": {
+      "name": "LUCH/OLYMP",
+      "expected_tier": "ELEVATED",
+      "actual_tier": "ELEVATED",
+      "threat_score": 64.15,
+      "maneuver_class": "Station-keeping",
+      "maneuver_confidence": 0.99,
+      "explanation": "Object 991: Threat score 64.1/100 (ELEVATED).\nAlert operations team for assessment.\nSub-scores: intent=100, anomaly=35, proximity=46, pattern=60.\n- Intent: SURVEILLANCE at HIGH (confidence 99%)\n- Proximity: 15 km from Defense Support Program 23, receding\n- Patterns: SHADOWING",
+      "triggered": true
+    },
+    "992": {
+      "name": "COSMOS-2542",
+      "expected_tier": "ELEVATED",
+      "actual_tier": "ELEVATED",
+      "threat_score": 75.47,
+      "maneuver_class": "Station-keeping",
+      "maneuver_confidence": 1.0,
+      "explanation": "Object 992: Threat score 75.5/100 (ELEVATED).\nAlert operations team for assessment.\nSub-scores: intent=100, anomaly=98, proximity=34, pattern=50.\n- Intent: EVASIVE at ELEVATED (confidence 100%)\n- Anomaly: score 1.2151 (P98, threshold 0.1291)\n- Proximity: 5958 km from International Space Station, closing at 5.29 km/s\n- Patterns: EVASION",
+      "triggered": true
+    },
+    "993": {
+      "name": "DEBRIS-KZ-1A",
+      "expected_tier": "CRITICAL",
+      "actual_tier": "ELEVATED",
+      "threat_score": 67.05,
+      "maneuver_class": "Major Maneuver",
+      "maneuver_confidence": 0.725,
+      "explanation": "Object 993: Threat score 67.1/100 (ELEVATED).\nAlert operations team for assessment.\nSub-scores: intent=90, anomaly=100, proximity=42.\n- Intent: RENDEZVOUS at ELEVATED (confidence 72%)\n- Anomaly: score 6.7107 (P100, threshold 0.1291)\n- Proximity: 372 km from International Space Station, closing at 5.62 km/s",
+      "triggered": true
+    },
+    "994": {
+      "name": "SJ-17",
+      "expected_tier": "ELEVATED",
+      "actual_tier": "ELEVATED",
+      "threat_score": 70.91,
+      "maneuver_class": "Minor Maneuver",
+      "maneuver_confidence": 0.751,
+      "explanation": "Object 994: Threat score 70.9/100 (ELEVATED).\nAlert operations team for assessment.\nSub-scores: intent=100, anomaly=100, proximity=14, pattern=50.\n- Intent: EVASIVE at ELEVATED (confidence 75%)\n- Anomaly: score 26813.8926 (P100, threshold 0.1291)\n- Patterns: PHASING, EVASION",
+      "triggered": true
+    },
+    "995": {
+      "name": "SHIJIAN-21",
+      "expected_tier": "ELEVATED",
+      "actual_tier": "ELEVATED",
+      "threat_score": 63.79,
+      "maneuver_class": "Station-keeping",
+      "maneuver_confidence": 0.997,
+      "explanation": "Object 995: Threat score 63.8/100 (ELEVATED).\nAlert operations team for assessment.\nSub-scores: intent=100, anomaly=35, proximity=44, pattern=60.\n- Intent: SURVEILLANCE at HIGH (confidence 100%)\n- Proximity: 20 km from Wideband Global SATCOM 10, receding\n- Patterns: SHADOWING",
+      "triggered": true
+    },
+    "996": {
+      "name": "OBJECT-2024-999A",
+      "expected_tier": "ELEVATED",
+      "actual_tier": "ELEVATED",
+      "threat_score": 75.03,
+      "maneuver_class": "Minor Maneuver",
+      "maneuver_confidence": 0.744,
+      "explanation": "Object 996: Threat score 75.0/100 (ELEVATED).\nAlert operations team for assessment.\nSub-scores: intent=100, anomaly=98, proximity=32, pattern=50.\n- Intent: EVASIVE at ELEVATED (confidence 74%)\n- Anomaly: score 0.5187 (P98, threshold 0.1291)\n- Proximity: 184 km from TDRS-13, closing at 0.07 km/s\n- Patterns: EVASION",
+      "triggered": true
+    }
+  }
+}

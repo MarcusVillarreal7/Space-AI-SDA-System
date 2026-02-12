@@ -21,6 +21,9 @@ import type {
   SimulationStatus,
   ThreatSummary,
   ThreatAssessment,
+  TrajectoryPrediction,
+  AssessAllStatus,
+  ConjunctionPair,
   Alert,
   SystemMetrics,
 } from '../types';
@@ -49,6 +52,10 @@ export const api = {
   getThreatSummary: () => fetchJSON<ThreatSummary>('/threat/summary'),
   assessObject: (id: number) => fetchJSON<ThreatAssessment>(`/threat/object/${id}`),
   getAlerts: (limit = 50) => fetchJSON<Alert[]>(`/threat/alerts?limit=${limit}`),
+  predictTrajectory: (id: number) => fetchJSON<TrajectoryPrediction>(`/threat/object/${id}/prediction`),
+  assessAll: () => postJSON<AssessAllStatus>('/threat/assess-all'),
+  assessAllStatus: () => fetchJSON<AssessAllStatus>('/threat/assess-all/status'),
+  getConjunctions: () => fetchJSON<{ pairs: ConjunctionPair[]; analyzed_pairs: number; timestamp: string }>('/threat/conjunctions'),
 
   getMetrics: () => fetchJSON<SystemMetrics>('/metrics'),
 };

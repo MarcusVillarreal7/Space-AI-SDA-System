@@ -50,17 +50,18 @@ class ThreatAssessment:
     maneuver_class: int
     maneuver_name: str
     maneuver_confidence: float
+    maneuver_probabilities: Optional[List[float]] = None
     # Intent
-    intent_result: Optional[IntentResult]
+    intent_result: Optional[IntentResult] = None
     # Anomaly
-    anomaly_result: Optional[AnomalyResult]
+    anomaly_result: Optional[AnomalyResult] = None
     # Threat score
-    threat_score: ThreatScore
+    threat_score: Optional[ThreatScore] = None
     # Timing
-    latency_ms: float
+    latency_ms: float = 0.0
     # Raw data summary
-    num_observations: int
-    observation_window_s: float
+    num_observations: int = 0
+    observation_window_s: float = 0.0
 
 
 # -----------------------------------------------------------------------
@@ -108,12 +109,25 @@ class ThreatAssessmentPipeline:
     def __init__(
         self,
         anomaly_checkpoint: Optional[str] = None,
+        maneuver_checkpoint: Optional[str] = None,
         intent_classifier: Optional[IntentClassifier] = None,
         threat_scorer: Optional[ThreatScorer] = None,
         anomaly_detector: Optional[AnomalyDetector] = None,
         device: Optional[str] = None,
     ):
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Neural maneuver classifier (CNN-LSTM, 719K params)
+        self.maneuver_predictor = None
+        maneuver_ckpt = maneuver_checkpoint or "checkpoints/phase3_day4/maneuver_classifier.pt"
+        if Path(maneuver_ckpt).exists():
+            try:
+                from src.ml.inference import ManeuverPredictor
+                self.maneuver_predictor = ManeuverPredictor(
+                    maneuver_ckpt, device=self.device
+                )
+            except Exception:
+                pass  # Fall back to heuristic
 
         # Intent classifier (rule-based, no checkpoint needed)
         self.intent_classifier = intent_classifier or IntentClassifier()
@@ -142,17 +156,25 @@ class ThreatAssessmentPipeline:
         timestamps: np.ndarray,
         maneuver_class_override: Optional[int] = None,
         confidence_override: Optional[float] = None,
+        full_positions: Optional[np.ndarray] = None,
+        full_velocities: Optional[np.ndarray] = None,
+        full_timestamps: Optional[np.ndarray] = None,
     ) -> ThreatAssessment:
         """
         Run full threat assessment for a single object.
 
         Args:
             object_id: Object identifier.
-            positions: Position time series (T, 3) in km.
+            positions: Position time series (T, 3) in km — used for
+                CNN-LSTM classification and anomaly detection.
             velocities: Velocity time series (T, 3) in km/s.
             timestamps: Timestamps (T,) in seconds from epoch.
             maneuver_class_override: Override maneuver class (skip heuristic).
             confidence_override: Override confidence (skip heuristic).
+            full_positions: Optional full trajectory (T_full, 3) for proximity
+                scanning and maneuver history derivation.
+            full_velocities: Matching velocities for *full_positions*.
+            full_timestamps: Matching timestamps for *full_positions*.
 
         Returns:
             ThreatAssessment with all module outputs.
@@ -160,15 +182,37 @@ class ThreatAssessmentPipeline:
         t0 = time.perf_counter()
         n = len(timestamps)
 
-        # Step 1: Derive maneuver events from velocity changes
-        maneuver_records, maneuver_events = self._derive_maneuvers(
-            positions, velocities, timestamps
-        )
+        # Step 1: Derive maneuver events from velocity changes.
+        # Use the full trajectory when available so that pattern detection
+        # (SHADOWING, PHASING, EVASION) can see hours of maneuver history
+        # instead of only the 20-step classification window (~20 min).
+        if (full_positions is not None and full_velocities is not None
+                and full_timestamps is not None):
+            maneuver_records, maneuver_events = self._derive_maneuvers(
+                full_positions, full_velocities, full_timestamps
+            )
+        else:
+            maneuver_records, maneuver_events = self._derive_maneuvers(
+                positions, velocities, timestamps
+            )
 
-        # Step 2: Classify current maneuver (heuristic or override)
+        # Step 2: Classify current maneuver (neural, heuristic, or override)
+        maneuver_probs = None
         if maneuver_class_override is not None:
             maneuver_class = maneuver_class_override
             confidence = confidence_override or 0.9
+        elif self.maneuver_predictor is not None and n >= 5:
+            try:
+                pred = self.maneuver_predictor.predict(
+                    positions, velocities, timestamps
+                )
+                maneuver_class = pred["class_idx"]
+                confidence = pred["confidence"]
+                maneuver_probs = pred["probabilities"].tolist()
+            except Exception:
+                maneuver_class, confidence = self._classify_current_maneuver(
+                    maneuver_records
+                )
         else:
             maneuver_class, confidence = self._classify_current_maneuver(
                 maneuver_records
@@ -179,9 +223,18 @@ class ThreatAssessmentPipeline:
             3: "Minor Maneuver", 4: "Major Maneuver", 5: "Deorbit",
         }
 
-        # Step 3: Current state
-        current_pos = tuple(positions[-1].tolist())
-        current_vel = tuple(velocities[-1].tolist())
+        # Step 3: Find closest approach to any asset across the trajectory.
+        # When full_positions is provided, scan the entire trajectory for
+        # proximity events; otherwise scan only the classification window.
+        prox_pos = full_positions if full_positions is not None else positions
+        prox_vel = full_velocities if full_velocities is not None else velocities
+        # Only use propagated asset positions when we have the full trajectory.
+        # Short classification windows would give wrong results because the
+        # asset orbits far from its catalog position in that time.
+        prox_ts = full_timestamps if full_timestamps is not None else None
+        current_pos, current_vel = self._find_closest_approach(
+            prox_pos, prox_vel, timestamps=prox_ts
+        )
 
         # Step 4: Intent classification
         intent_result = self.intent_classifier.classify(
@@ -223,6 +276,7 @@ class ThreatAssessmentPipeline:
             maneuver_class=maneuver_class,
             maneuver_name=maneuver_names.get(maneuver_class, "Unknown"),
             maneuver_confidence=confidence,
+            maneuver_probabilities=maneuver_probs,
             intent_result=intent_result,
             anomaly_result=anomaly_result,
             threat_score=threat_score,
@@ -259,6 +313,143 @@ class ThreatAssessmentPipeline:
     # Internal helpers
     # ------------------------------------------------------------------
 
+    def _find_closest_approach(
+        self,
+        positions: np.ndarray,
+        velocities: np.ndarray,
+        timestamps: Optional[np.ndarray] = None,
+        sample_stride: int = 10,
+    ) -> Tuple[tuple, tuple]:
+        """
+        Find the trajectory timestep with the closest approach to any
+        **same-regime** high-value asset, then return a (position,
+        velocity) pair suitable for ``compute_proximity()``.
+
+        When *timestamps* are provided, asset positions are propagated
+        forward using a circular-orbit (Rodrigues rotation) approximation
+        so that LEO assets (ISS, 90-min period) are compared at their
+        correct positions.  The returned position/velocity are "warped"
+        so that ``compute_proximity()`` — which uses the static asset
+        catalog — produces the correct relative state (distance, closing
+        rate, TCA).
+
+        Only overrides the default (last timestep) when a genuine close
+        approach is detected (min distance < warning radius).
+        """
+        import math as _math
+
+        n = len(positions)
+        last_pos = tuple(positions[-1].tolist())
+        last_vel = tuple(velocities[-1].tolist())
+        catalog = self.intent_classifier.catalog
+
+        if n <= 1 or catalog is None or not catalog.all():
+            return last_pos, last_vel
+
+        from src.ml.intent.proximity_context import classify_regime
+        mid = n // 2
+        obj_regime = classify_regime(tuple(positions[mid].tolist()))
+
+        same_regime_assets = catalog.by_regime(obj_regime)
+        if not same_regime_assets:
+            return last_pos, last_vel
+
+        warning_radius = self.intent_classifier.warning_radius_km
+
+        # Sample indices
+        indices = np.arange(0, n, sample_stride)
+        if indices[-1] != n - 1:
+            indices = np.append(indices, n - 1)
+        sampled_pos = positions[indices]   # (S, 3)
+
+        best_dist = float("inf")
+        best_tidx = -1
+        best_asset_idx = -1
+        best_prop_pos = None
+        best_prop_vel = None
+
+        use_propagation = (timestamps is not None and len(timestamps) > 1)
+
+        if use_propagation:
+            sampled_times = timestamps[indices]
+            t0 = float(timestamps[0])
+
+            for ai, asset in enumerate(same_regime_assets):
+                a_pos = np.asarray(asset.position_km, dtype=np.float64)
+                a_vel = np.asarray(asset.velocity_km_s, dtype=np.float64)
+                r_mag = np.linalg.norm(a_pos)
+                v_mag = np.linalg.norm(a_vel)
+                if r_mag < 100.0 or v_mag < 0.01:
+                    continue
+
+                # Angular velocity and orbital angular momentum
+                omega = v_mag / r_mag
+                h = np.cross(a_pos, a_vel)
+                h_norm = np.linalg.norm(h)
+                if h_norm < 1e-10:
+                    continue
+                h_hat = h / h_norm
+
+                # Vectorized Rodrigues rotation for all sampled times
+                angles = omega * (sampled_times - t0)     # (S,)
+                cos_a = np.cos(angles)[:, np.newaxis]     # (S,1)
+                sin_a = np.sin(angles)[:, np.newaxis]     # (S,1)
+
+                cross_hp = np.cross(h_hat, a_pos)         # (3,)
+                dot_hp = np.dot(h_hat, a_pos)             # scalar
+                cross_hv = np.cross(h_hat, a_vel)         # (3,)
+                dot_hv = np.dot(h_hat, a_vel)             # scalar
+
+                prop_pos = (a_pos * cos_a
+                            + cross_hp * sin_a
+                            + h_hat * dot_hp * (1.0 - cos_a))   # (S,3)
+                prop_vel = (a_vel * cos_a
+                            + cross_hv * sin_a
+                            + h_hat * dot_hv * (1.0 - cos_a))   # (S,3)
+
+                dists = np.linalg.norm(sampled_pos - prop_pos, axis=1)
+                min_idx = int(np.argmin(dists))
+                min_d = float(dists[min_idx])
+
+                if min_d < best_dist:
+                    best_dist = min_d
+                    best_tidx = int(indices[min_idx])
+                    best_asset_idx = ai
+                    best_prop_pos = prop_pos[min_idx].copy()
+                    best_prop_vel = prop_vel[min_idx].copy()
+        else:
+            # Static comparison (no timestamps available)
+            asset_positions = np.array(
+                [a.position_km for a in same_regime_assets], dtype=np.float64
+            )
+            diff = sampled_pos[:, np.newaxis, :] - asset_positions[np.newaxis, :, :]
+            dists = np.linalg.norm(diff, axis=2)
+            best_dist = float(dists.min())
+            if best_dist < warning_radius:
+                flat_idx = int(np.argmin(dists))
+                si = flat_idx // dists.shape[1]
+                best_tidx = int(indices[si])
+                return (tuple(positions[best_tidx].tolist()),
+                        tuple(velocities[best_tidx].tolist()))
+            return last_pos, last_vel
+
+        if best_dist < warning_radius and best_tidx >= 0:
+            # "Warp" position/velocity so that compute_proximity()
+            # (which uses static catalog positions) produces the correct
+            # relative state (distance, closing rate, TCA).
+            asset = same_regime_assets[best_asset_idx]
+            static_pos = np.asarray(asset.position_km, dtype=np.float64)
+            static_vel = np.asarray(asset.velocity_km_s, dtype=np.float64)
+
+            rel_pos = positions[best_tidx] - best_prop_pos
+            rel_vel = velocities[best_tidx] - best_prop_vel
+
+            synth_pos = static_pos + rel_pos
+            synth_vel = static_vel + rel_vel
+            return (tuple(synth_pos.tolist()), tuple(synth_vel.tolist()))
+
+        return last_pos, last_vel
+
     def _derive_maneuvers(
         self,
         positions: np.ndarray,
@@ -279,18 +470,40 @@ class ThreatAssessmentPipeline:
         # Compute raw velocity differences
         dv_raw = np.diff(velocities, axis=0)
 
-        # Subtract expected gravitational contribution at each step
-        # a_gravity = -mu * r / |r|^3, so expected dv = a * dt
+        # Subtract expected gravitational contribution using an adaptive
+        # method: compute residuals via both forward Euler and trapezoidal
+        # gravity subtraction, then pick whichever gives a smaller residual
+        # at each timestep.
+        #
+        # Why adaptive: the scenario injector propagates trajectories using
+        # forward Euler integration.  Trapezoidal gravity subtraction on
+        # Euler-integrated data introduces ~16 m/s residuals (class 2),
+        # masking the real maneuver events needed for pattern detection.
+        # Conversely, analytical/Kepler trajectories have O(dt²) Euler
+        # residuals (~18 m/s for LEO) that trapezoidal reduces to O(dt³).
+        # Using the minimum of both methods handles either data source.
         dt = np.diff(timestamps)  # (T-1,)
-        r = positions[:-1]  # position at start of each interval
-        r_mag = np.linalg.norm(r, axis=1, keepdims=True)  # (T-1, 1)
-        r_mag = np.maximum(r_mag, 1.0)  # prevent division by zero
-        a_gravity = -self._MU_EARTH * r / (r_mag ** 3)  # (T-1, 3)
-        dv_gravity = a_gravity * dt[:, np.newaxis]  # (T-1, 3)
+        r_start = positions[:-1]
+        r_end = positions[1:]
+        r_mag_start = np.maximum(np.linalg.norm(r_start, axis=1, keepdims=True), 1.0)
+        r_mag_end = np.maximum(np.linalg.norm(r_end, axis=1, keepdims=True), 1.0)
+        a_start = -self._MU_EARTH * r_start / (r_mag_start ** 3)
+        a_end = -self._MU_EARTH * r_end / (r_mag_end ** 3)
 
-        # Residual delta-V = actual maneuver thrust
-        dv_maneuver = dv_raw - dv_gravity
-        dv_mag = np.linalg.norm(dv_maneuver, axis=1)
+        # Forward Euler: dv_gravity ≈ a(r_start) * dt
+        dv_euler = a_start * dt[:, np.newaxis]
+        # Trapezoidal: dv_gravity ≈ (a(r_start) + a(r_end))/2 * dt
+        dv_trap = 0.5 * (a_start + a_end) * dt[:, np.newaxis]
+
+        res_euler = dv_raw - dv_euler
+        res_trap = dv_raw - dv_trap
+        euler_mag = np.linalg.norm(res_euler, axis=1)
+        trap_mag = np.linalg.norm(res_trap, axis=1)
+
+        # Pick whichever method gives the smaller residual at each step
+        use_trap = trap_mag < euler_mag
+        dv_maneuver = np.where(use_trap[:, np.newaxis], res_trap, res_euler)
+        dv_mag = np.minimum(euler_mag, trap_mag)
 
         maneuver_records = []
         maneuver_events = []

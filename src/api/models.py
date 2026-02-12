@@ -87,9 +87,50 @@ class ThreatAssessmentResponse(BaseModel):
     pattern_score: float
     maneuver_class: str
     maneuver_confidence: float
+    maneuver_probabilities: Optional[List[float]] = None
     contributing_factors: List[str]
     explanation: str
     latency_ms: float
+
+
+class PredictedPoint(BaseModel):
+    step: int
+    lat: float
+    lon: float
+    alt_km: float
+    position_x: float
+    position_y: float
+    position_z: float
+
+
+class TrajectoryPredictionResponse(BaseModel):
+    object_id: int
+    object_name: str
+    points: List[PredictedPoint]
+    model: str = "TrajectoryTransformer"
+    latency_ms: float
+
+
+class ConjunctionPair(BaseModel):
+    object1_id: int
+    object1_name: str
+    object2_id: int
+    object2_name: str
+    risk_score: float
+    miss_distance_km: float
+    time_to_closest_approach_s: float
+
+
+class ConjunctionResponse(BaseModel):
+    pairs: List[ConjunctionPair]
+    analyzed_pairs: int
+    timestamp: str
+
+
+class AssessAllStatus(BaseModel):
+    running: bool
+    completed: int
+    total: int
 
 
 class AlertResponse(BaseModel):

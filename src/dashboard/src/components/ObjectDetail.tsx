@@ -4,15 +4,21 @@ import { api } from '../services/api';
 import { TierBadge } from './TierBadge';
 import { ScoreGauge } from './ScoreGauge';
 import type { ThreatAssessment, ObjectDetail as ObjectDetailType } from '../types';
+import { TIER_COLORS } from '../types';
 import {
   LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip,
+  BarChart, Bar, Cell,
 } from 'recharts';
+
+const MANEUVER_CLASSES = ['Normal', 'Drift/Decay', 'Station-keeping', 'Minor Maneuver', 'Major Maneuver', 'Deorbit'];
+const MANEUVER_COLORS = ['#22c55e', '#84cc16', '#3b82f6', '#eab308', '#f97316', '#ef4444'];
 
 export function ObjectDetail() {
   const selectedObjectId = useSimStore((s) => s.selectedObjectId);
   const selectObject = useSimStore((s) => s.selectObject);
   const assessment = useSimStore((s) => s.selectedAssessment);
   const setAssessment = useSimStore((s) => s.setSelectedAssessment);
+  const setPrediction = useSimStore((s) => s.setSelectedPrediction);
   const [detail, setDetail] = useState<ObjectDetailType | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -20,16 +26,18 @@ export function ObjectDetail() {
     if (selectedObjectId === null) return;
     setLoading(true);
 
-    // Fetch object detail and threat assessment in parallel
+    // Fetch object detail, threat assessment, and trajectory prediction in parallel
     Promise.all([
       api.getObject(selectedObjectId).catch(() => null),
       api.assessObject(selectedObjectId).catch(() => null),
-    ]).then(([obj, threat]) => {
+      api.predictTrajectory(selectedObjectId).catch(() => null),
+    ]).then(([obj, threat, pred]) => {
       setDetail(obj);
       setAssessment(threat);
+      setPrediction(pred);
       setLoading(false);
     });
-  }, [selectedObjectId, setAssessment]);
+  }, [selectedObjectId, setAssessment, setPrediction]);
 
   if (selectedObjectId === null) return null;
 
@@ -47,6 +55,16 @@ export function ObjectDetail() {
         .filter((_, i) => i % 10 === 0) // Every 10th point
         .map((p) => ({ t: p.timestep, alt: Math.round(p.alt_km) }))
     : [];
+
+  // Maneuver probability data
+  const maneuverData = assessment?.maneuver_probabilities
+    ? MANEUVER_CLASSES.map((name, i) => ({
+        name: name.length > 12 ? name.slice(0, 10) + '..' : name,
+        fullName: name,
+        prob: Math.round((assessment.maneuver_probabilities![i] ?? 0) * 100),
+        color: MANEUVER_COLORS[i],
+      }))
+    : null;
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
@@ -104,11 +122,40 @@ export function ObjectDetail() {
               <span className="text-xs text-slate-500 font-medium">Contributing Factors:</span>
               <ul className="mt-1 space-y-0.5">
                 {assessment.contributing_factors.map((f, i) => (
-                  <li key={i} className="text-xs text-slate-400">• {f}</li>
+                  <li key={i} className="text-xs text-slate-400">&#8226; {f}</li>
                 ))}
               </ul>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Maneuver Classification Probabilities */}
+      {maneuverData && (
+        <div className="p-4 border-b border-space-700">
+          <span className="text-xs font-semibold text-slate-400 uppercase mb-2 block">
+            CNN-LSTM Classification
+          </span>
+          <ResponsiveContainer width="100%" height={120}>
+            <BarChart data={maneuverData} layout="vertical" margin={{ left: 0, right: 10, top: 0, bottom: 0 }}>
+              <XAxis type="number" domain={[0, 100]} hide />
+              <YAxis
+                type="category"
+                dataKey="name"
+                width={75}
+                tick={{ fontSize: 9, fill: '#94a3b8' }}
+              />
+              <Tooltip
+                contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 4, fontSize: 11 }}
+                formatter={(v: number, _n: string, entry: any) => [`${v}%`, entry.payload.fullName]}
+              />
+              <Bar dataKey="prob" radius={[0, 3, 3, 0]}>
+                {maneuverData.map((entry, i) => (
+                  <Cell key={i} fill={entry.color} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       )}
 
