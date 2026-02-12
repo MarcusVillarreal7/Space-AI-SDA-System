@@ -64,4 +64,18 @@ export const api = {
   getConjunctions: () => fetchJSON<{ pairs: ConjunctionPair[]; analyzed_pairs: number; timestamp: string }>('/threat/conjunctions'),
 
   getMetrics: () => fetchJSON<SystemMetrics>('/metrics'),
+  getDataSource: () => fetchJSON<{
+    source: string;
+    source_url: string;
+    propagator: string;
+    description: string;
+    objects: number;
+    timesteps: number;
+    timestep_seconds: number;
+    time_start: string;
+    time_end: string;
+    regimes: Record<string, number>;
+    scenarios_injected: number;
+    scenario_objects: string;
+  }>('/data-source'),
 };

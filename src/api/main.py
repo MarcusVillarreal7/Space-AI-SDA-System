@@ -142,6 +142,42 @@ async def health():
     }
 
 
+@app.get("/api/data-source")
+async def data_source():
+    """Return metadata about the loaded dataset and its provenance."""
+    catalog = app_state.get("catalog")
+    if not catalog:
+        return {"source": "unknown"}
+
+    # Regime breakdown
+    regimes: dict[str, int] = {}
+    for r in catalog.regimes:
+        regimes[r] = regimes.get(r, 0) + 1
+
+    # Time window
+    time_start = catalog.time_isos[0] if catalog.time_isos else ""
+    time_end = catalog.time_isos[-1] if catalog.time_isos else ""
+
+    return {
+        "source": "CelesTrak NORAD Two-Line Element Sets",
+        "source_url": "https://celestrak.org/NORAD/elements/",
+        "propagator": "SGP4/SDP4 via Skyfield",
+        "description": (
+            "Real satellite ephemerides from the NORAD catalog, propagated "
+            "forward using SGP4. Positions and velocities represent actual "
+            "orbital trajectories. Sensor measurements are synthetic."
+        ),
+        "objects": catalog.n_objects,
+        "timesteps": catalog.n_timesteps,
+        "timestep_seconds": 60,
+        "time_start": time_start,
+        "time_end": time_end,
+        "regimes": regimes,
+        "scenarios_injected": 7,
+        "scenario_objects": "990-996 (replaced with adversary trajectories at runtime)",
+    }
+
+
 # Mount static files for production (built React app)
 dist_path = Path("src/dashboard/dist")
 if dist_path.exists():
