@@ -17,10 +17,11 @@ export function TrackingTab() {
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const selectObject = useSimStore((s) => s.selectObject);
   const liveObjects = useSimStore((s) => s.objects);
+  const resetVersion = useSimStore((s) => s.resetVersion);
 
   useEffect(() => {
     api.getObjects({ limit: 1000 }).then(setAllObjects).catch(() => {});
-  }, []);
+  }, [resetVersion]);
 
   // Merge live threat_tiers from WebSocket into the REST-fetched objects
   const mergedObjects = useMemo(() => {

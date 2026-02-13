@@ -50,6 +50,8 @@ interface SimState {
   setBottomTab: (tab: string) => void;
   setSpeed: (speed: number) => void;
   setPlaying: (playing: boolean) => void;
+  resetVersion: number;
+  triggerReset: () => void;
 }
 
 export const useSimStore = create<SimState>((set) => ({
@@ -68,6 +70,7 @@ export const useSimStore = create<SimState>((set) => ({
   isConnected: false,
   isLoading: true,
   bottomTab: 'tracking',
+  resetVersion: 0,
 
   setSimulation: (isPlaying, speed, timestep, maxTimestep, timeIso) =>
     set({ isPlaying, speed, timestep, maxTimestep, timeIso }),
@@ -99,4 +102,13 @@ export const useSimStore = create<SimState>((set) => ({
   setSpeed: (speed) => set({ speed }),
 
   setPlaying: (playing) => set({ isPlaying: playing }),
+
+  triggerReset: () =>
+    set((state) => ({
+      objects: state.objects.map((o) => ({ ...o, threat_tier: 'MINIMAL' as ThreatTier })),
+      alerts: [],
+      assessAllStatus: null,
+      selectedAssessment: null,
+      resetVersion: state.resetVersion + 1,
+    })),
 }));
