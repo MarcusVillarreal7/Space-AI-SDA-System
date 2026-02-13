@@ -80,10 +80,10 @@ async def reset_simulation():
     from src.api.main import app_state
     from src.api.database import clear_alerts, clear_assessment_cache
 
-    # Pause and seek to 0
+    # Reset clock to beginning and resume playback
     clock = _get_clock()
-    clock.pause()
     clock.seek(0)
+    clock.play()
 
     # Clear threat tiers
     app_state["threat_tiers"] = {}

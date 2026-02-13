@@ -10,6 +10,7 @@ export function ThreatSummary() {
   const setAssessAllStatus = useSimStore((s) => s.setAssessAllStatus);
   const setAlerts = useSimStore((s) => s.setAlerts);
   const triggerReset = useSimStore((s) => s.triggerReset);
+  const setPlaying = useSimStore((s) => s.setPlaying);
   const pollRef = useRef<ReturnType<typeof setInterval>>();
 
   const handleAssessAll = useCallback(async () => {
@@ -26,13 +27,15 @@ export function ThreatSummary() {
       await api.resetSimulation();
       // Clear all frontend state: objects' tiers, alerts, assessments
       triggerReset();
+      // Backend auto-plays after reset — sync frontend state
+      setPlaying(true);
       // Refresh threat summary to show cleared tiers
       const newSummary = await api.getThreatSummary();
       setThreatSummary(newSummary);
     } catch (e) {
       console.error('Failed to reset:', e);
     }
-  }, [triggerReset, setThreatSummary]);
+  }, [triggerReset, setPlaying, setThreatSummary]);
 
   // Poll for progress when running
   useEffect(() => {
