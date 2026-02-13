@@ -18,7 +18,7 @@ import {
 } from 'cesium';
 import { useSimStore } from '../store/useSimStore';
 import { TIER_COLORS } from '../types';
-import type { ThreatTier } from '../types';
+import type { ThreatTier, ObjectType } from '../types';
 
 // Disable Ion — we use the bundled Natural Earth imagery (no auth needed)
 Ion.defaultAccessToken = '';
@@ -29,6 +29,12 @@ function tierToColor(tier: ThreatTier): Color {
 }
 
 const PULSE_TIERS = new Set<ThreatTier>(['CRITICAL', 'ELEVATED']);
+
+const TYPE_PIXEL_SIZE: Record<ObjectType, number> = {
+  PAYLOAD: 4,
+  DEBRIS: 2,
+  ROCKET_BODY: 3,
+};
 
 export function Globe() {
   const viewerRef = useRef<CesiumViewer | null>(null);
@@ -43,13 +49,14 @@ export function Globe() {
   const pointData = useMemo(() => {
     return objects.map((obj) => {
       const shouldPulse = PULSE_TIERS.has(obj.threat_tier);
+      const baseSize = TYPE_PIXEL_SIZE[obj.object_type] ?? 4;
       return {
         id: obj.id,
         name: obj.name,
         position: Cartesian3.fromDegrees(obj.lon, obj.lat, obj.alt_km * 1000),
         color: tierToColor(obj.threat_tier),
         tier: obj.threat_tier,
-        pixelSize: obj.id === selectedObjectId ? 8 : shouldPulse ? 6 : 4,
+        pixelSize: obj.id === selectedObjectId ? 8 : shouldPulse ? 6 : baseSize,
         shouldPulse,
       };
     });

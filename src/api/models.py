@@ -11,6 +11,12 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 
+class ObjectTypeEnum(str, Enum):
+    PAYLOAD = "PAYLOAD"
+    DEBRIS = "DEBRIS"
+    ROCKET_BODY = "ROCKET_BODY"
+
+
 class ThreatTierEnum(str, Enum):
     MINIMAL = "MINIMAL"
     LOW = "LOW"
@@ -36,6 +42,7 @@ class TrajectoryPoint(BaseModel):
 class ObjectPosition(BaseModel):
     id: int
     name: str
+    object_type: ObjectTypeEnum = ObjectTypeEnum.PAYLOAD
     lat: float
     lon: float
     alt_km: float
@@ -45,6 +52,7 @@ class ObjectPosition(BaseModel):
 class ObjectSummary(BaseModel):
     id: int
     name: str
+    object_type: ObjectTypeEnum = ObjectTypeEnum.PAYLOAD
     regime: str
     altitude_km: float
     speed_km_s: float
@@ -55,6 +63,7 @@ class ObjectSummary(BaseModel):
 class ObjectDetail(BaseModel):
     id: int
     name: str
+    object_type: ObjectTypeEnum = ObjectTypeEnum.PAYLOAD
     regime: str
     altitude_km: float
     speed_km_s: float
@@ -79,6 +88,7 @@ class ThreatSummaryResponse(BaseModel):
 class ThreatAssessmentResponse(BaseModel):
     object_id: int
     object_name: str
+    object_type: ObjectTypeEnum = ObjectTypeEnum.PAYLOAD
     threat_score: float
     threat_tier: ThreatTierEnum
     intent_score: float

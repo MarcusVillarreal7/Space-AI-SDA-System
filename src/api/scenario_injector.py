@@ -449,6 +449,12 @@ class ScenarioInjector:
             catalog.velocities[idx] = vel
             catalog.object_names[idx] = scenario.name
 
+            # Set object type: 993 (DEBRIS-KZ-1A) is debris, all others are payloads
+            if hasattr(catalog, "object_types") and catalog.object_types:
+                catalog.object_types[idx] = (
+                    "DEBRIS" if scenario.object_idx == 993 else "PAYLOAD"
+                )
+
             # Update reference altitude/speed
             mid = n_timesteps // 2
             r_mid = np.linalg.norm(pos[mid])

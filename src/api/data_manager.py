@@ -114,6 +114,7 @@ class SpaceCatalog:
         self.n_timesteps: int = 0
         self.object_ids: np.ndarray = np.array([], dtype=int)
         self.object_names: list[str] = []
+        self.object_types: list[str] = []
         self.regimes: list[str] = []
 
         # (N_objects, N_timesteps, 3)
@@ -185,6 +186,17 @@ class SpaceCatalog:
         # Classify regimes
         self.regimes = [_classify_regime(alt) for alt in self.ref_altitudes]
 
+        # Object types (from parquet column if present, else default to PAYLOAD)
+        if "object_type" in df.columns:
+            type_series = df.groupby("object_id")["object_type"].first()
+            self.object_types = [
+                type_series.get(oid, "PAYLOAD") for oid in self.object_ids
+            ]
+            logger.info("Object types loaded from parquet: %s",
+                        {t: self.object_types.count(t) for t in set(self.object_types)})
+        else:
+            self.object_types = ["PAYLOAD"] * self.n_objects
+
         # Pre-compute geodetic coordinates
         logger.info("Pre-computing geodetic coordinates (vectorized)...")
         t_geo = time.perf_counter()
@@ -208,6 +220,7 @@ class SpaceCatalog:
             {
                 "id": int(self.object_ids[i]),
                 "name": self.object_names[i],
+                "object_type": self.object_types[i] if self.object_types else "PAYLOAD",
                 "lat": float(self.latitudes[i, ts]),
                 "lon": float(self.longitudes[i, ts]),
                 "alt_km": float(self.altitudes[i, ts]),
@@ -256,6 +269,7 @@ class SpaceCatalog:
         return {
             "id": int(self.object_ids[idx]),
             "name": self.object_names[idx],
+            "object_type": self.object_types[idx] if self.object_types else "PAYLOAD",
             "regime": self.regimes[idx],
             "altitude_km": float(self.ref_altitudes[idx]),
             "speed_km_s": float(self.ref_speeds[idx]),
@@ -267,6 +281,7 @@ class SpaceCatalog:
             {
                 "id": int(self.object_ids[i]),
                 "name": self.object_names[i],
+                "object_type": self.object_types[i] if self.object_types else "PAYLOAD",
                 "regime": self.regimes[i],
                 "altitude_km": float(self.ref_altitudes[i]),
                 "speed_km_s": float(self.ref_speeds[i]),

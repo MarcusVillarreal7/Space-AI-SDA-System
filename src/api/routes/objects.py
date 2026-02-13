@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 
-from src.api.models import ObjectDetail, ObjectSummary, TrajectoryPoint, ThreatTierEnum
+from src.api.models import ObjectDetail, ObjectSummary, ObjectTypeEnum, TrajectoryPoint, ThreatTierEnum
 
 router = APIRouter(prefix="/api/objects", tags=["objects"])
 
@@ -26,6 +26,7 @@ def _get_threat_tiers():
 @router.get("", response_model=list[ObjectSummary])
 async def list_objects(
     regime: str | None = Query(None, description="Filter by regime: LEO, MEO, GEO, HEO"),
+    object_type: str | None = Query(None, description="Filter by type: PAYLOAD, DEBRIS, ROCKET_BODY"),
     limit: int = Query(1000, ge=1, le=1000),
     offset: int = Query(0, ge=0),
 ):
@@ -36,6 +37,8 @@ async def list_objects(
 
     if regime:
         summaries = [s for s in summaries if s["regime"] == regime.upper()]
+    if object_type:
+        summaries = [s for s in summaries if s.get("object_type", "PAYLOAD") == object_type.upper()]
 
     page = summaries[offset:offset + limit]
 

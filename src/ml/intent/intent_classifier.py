@@ -192,14 +192,15 @@ class IntentClassifier:
             if proximity.distance_km < self.approach_threshold_km:
                 threat = ThreatLevel.HIGH
 
-        # Rule 2: Station-keeping near asset while actively closing → SURVEILLANCE.
-        # Require significant closing rate (> 10 m/s) to distinguish active
-        # shadowing from passive co-location (legitimate satellites in nearby
-        # GEO slots that drift past each other at < 10 m/s).
+        # Rule 2: Station-keeping near asset while co-orbital → SURVEILLANCE.
+        # Require co-orbital relative speed (< 1 km/s) to distinguish active
+        # shadowing from flyby conjunctions. A LEO satellite passing the ISS
+        # at 4+ km/s relative velocity is a brief flyby, not surveillance.
         if (maneuver_class == 2
                 and proximity.closing_rate_km_s < -0.01
                 and proximity.distance_km < self.warning_radius_km
-                and proximity.regime_match):
+                and proximity.regime_match
+                and proximity.is_coorbital):
             intent = IntentCategory.SURVEILLANCE
             threat = _max_threat(threat, ThreatLevel.ELEVATED)
 
@@ -231,15 +232,18 @@ class IntentClassifier:
             intent = IntentCategory.COLLISION_AVOIDANCE
             threat = _max_threat(threat, ThreatLevel.HIGH)
 
-        # Rule 7: CNN-LSTM station-keeping + sustained proximity → SHADOWING.
+        # Rule 7: CNN-LSTM station-keeping + sustained co-orbital proximity → SHADOWING.
         # The per-timestep heuristic delta-V classifier may produce class 0
         # for GEO station-keeping (residual < 5 m/s), so the ThreatEscalator
         # won't detect SHADOWING via class-2 events.  Use the CNN-LSTM's
         # overall classification combined with trajectory duration.
+        # Requires co-orbital relative speed (< 1 km/s) — objects crossing
+        # through at high relative velocity are flybys, not shadowing.
         if (
             "SHADOWING" not in patterns
             and maneuver_class == 2
             and proximity.regime_match
+            and proximity.is_coorbital
             and proximity.distance_km < self.escalator.shadowing_range_km
             and len(history) >= 2
             and (history[-1].timestamp - history[0].timestamp)

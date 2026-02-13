@@ -1,8 +1,22 @@
 export type ThreatTier = 'MINIMAL' | 'LOW' | 'MODERATE' | 'ELEVATED' | 'CRITICAL';
+export type ObjectType = 'PAYLOAD' | 'DEBRIS' | 'ROCKET_BODY';
+
+export const OBJECT_TYPE_LABELS: Record<ObjectType, string> = {
+  PAYLOAD: 'Satellite',
+  DEBRIS: 'Debris',
+  ROCKET_BODY: 'Rocket Body',
+};
+
+export const OBJECT_TYPE_COLORS: Record<ObjectType, string> = {
+  PAYLOAD: '#3b82f6',
+  DEBRIS: '#6b7280',
+  ROCKET_BODY: '#d97706',
+};
 
 export interface SatellitePosition {
   id: number;
   name: string;
+  object_type: ObjectType;
   lat: number;
   lon: number;
   alt_km: number;
@@ -12,6 +26,7 @@ export interface SatellitePosition {
 export interface ObjectSummary {
   id: number;
   name: string;
+  object_type: ObjectType;
   regime: string;
   altitude_km: number;
   speed_km_s: number;
@@ -40,6 +55,7 @@ export interface ObjectDetail extends ObjectSummary {
 export interface ThreatAssessment {
   object_id: number;
   object_name: string;
+  object_type: ObjectType;
   threat_score: number;
   threat_tier: ThreatTier;
   intent_score: number;

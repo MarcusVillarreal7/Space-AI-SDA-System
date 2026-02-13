@@ -154,6 +154,11 @@ async def data_source():
     for r in catalog.regimes:
         regimes[r] = regimes.get(r, 0) + 1
 
+    # Object type breakdown
+    object_types: dict[str, int] = {}
+    for t in (catalog.object_types or []):
+        object_types[t] = object_types.get(t, 0) + 1
+
     # Time window
     time_start = catalog.time_isos[0] if catalog.time_isos else ""
     time_end = catalog.time_isos[-1] if catalog.time_isos else ""
@@ -173,6 +178,7 @@ async def data_source():
         "time_start": time_start,
         "time_end": time_end,
         "regimes": regimes,
+        "object_types": object_types,
         "scenarios_injected": 7,
         "scenario_objects": "990-996 (replaced with adversary trajectories at runtime)",
     }

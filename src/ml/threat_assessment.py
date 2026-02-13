@@ -261,6 +261,8 @@ class ThreatAssessmentPipeline:
             object_id=object_id,
             intent_result=intent_result,
             anomaly_result=anomaly_result,
+            maneuver_class=maneuver_class,
+            maneuver_confidence=confidence,
         )
 
         latency = (time.perf_counter() - t0) * 1000.0
@@ -284,6 +286,228 @@ class ThreatAssessmentPipeline:
             num_observations=n,
             observation_window_s=window,
         )
+
+    def assess_by_type(
+        self,
+        object_id: str,
+        positions: np.ndarray,
+        velocities: np.ndarray,
+        timestamps: np.ndarray,
+        object_type: str = "PAYLOAD",
+        **kwargs,
+    ) -> ThreatAssessment:
+        """
+        Type-aware assessment dispatcher.
+
+        Routes PAYLOAD objects to the full 6-step pipeline (assess()),
+        and DEBRIS / ROCKET_BODY to a collision-only path that skips
+        maneuver classification, intent analysis, and anomaly detection.
+        """
+        if object_type in ("DEBRIS", "ROCKET_BODY"):
+            return self._assess_passive_object(
+                object_id=object_id,
+                positions=positions,
+                velocities=velocities,
+                timestamps=timestamps,
+                object_type=object_type,
+                full_positions=kwargs.get("full_positions"),
+                full_velocities=kwargs.get("full_velocities"),
+                full_timestamps=kwargs.get("full_timestamps"),
+            )
+        return self.assess(
+            object_id=object_id,
+            positions=positions,
+            velocities=velocities,
+            timestamps=timestamps,
+            **kwargs,
+        )
+
+    def _assess_passive_object(
+        self,
+        object_id: str,
+        positions: np.ndarray,
+        velocities: np.ndarray,
+        timestamps: np.ndarray,
+        object_type: str = "DEBRIS",
+        full_positions: Optional[np.ndarray] = None,
+        full_velocities: Optional[np.ndarray] = None,
+        full_timestamps: Optional[np.ndarray] = None,
+    ) -> ThreatAssessment:
+        """
+        Collision-only assessment for passive objects (debris / rocket bodies).
+
+        Skips maneuver classification, intent analysis, and anomaly detection.
+        Only computes proximity to high-value assets and assigns a threat score
+        based on collision geometry. Rocket bodies get a +5 breakup risk bonus.
+        """
+        t0 = time.perf_counter()
+        n = len(timestamps)
+
+        # Proximity scan (full trajectory if available)
+        prox_pos = full_positions if full_positions is not None else positions
+        prox_vel = full_velocities if full_velocities is not None else velocities
+        prox_ts = full_timestamps if full_timestamps is not None else None
+        current_pos, current_vel = self._find_closest_approach(
+            prox_pos, prox_vel, timestamps=prox_ts
+        )
+
+        # Compute proximity using the same proximity context + threat scorer logic
+        proximity_score = 0.0
+        nearest_asset = "none"
+        nearest_dist = float("inf")
+        try:
+            from src.ml.intent.proximity_context import compute_proximity
+            prox = compute_proximity(
+                current_pos, current_vel,
+                catalog=self.intent_classifier.catalog if self.intent_classifier else None,
+                warning_radius_km=self.intent_classifier.warning_radius_km if self.intent_classifier else 500.0,
+            )
+            if prox and prox.nearest_asset is not None:
+                nearest_asset = prox.nearest_asset.name
+                nearest_dist = prox.distance_km
+                # Use same scoring as ThreatScorer._compute_proximity_score
+                proximity_score = self.threat_scorer._compute_proximity_score(prox, [])
+        except Exception:
+            pass
+
+        # Breakup risk bonus for rocket bodies (pressurized tanks)
+        breakup_bonus = 5.0 if object_type == "ROCKET_BODY" else 0.0
+
+        # Threat score: proximity-only (capped at 100)
+        raw_score = proximity_score + breakup_bonus
+        score = min(100.0, max(0.0, raw_score))
+
+        # Tier from score
+        if score >= 80:
+            tier = ThreatTier.CRITICAL
+        elif score >= 60:
+            tier = ThreatTier.ELEVATED
+        elif score >= 40:
+            tier = ThreatTier.MODERATE
+        elif score >= 20:
+            tier = ThreatTier.LOW
+        else:
+            tier = ThreatTier.MINIMAL
+
+        factors = []
+        if proximity_score > 0:
+            factors.append(f"Proximity to {nearest_asset}: {nearest_dist:.0f} km")
+        if breakup_bonus > 0:
+            factors.append("Rocket body breakup risk (+5)")
+
+        # Build contextual explanation
+        explanation = self._build_passive_explanation(
+            object_type, nearest_asset, nearest_dist, proximity_score,
+            breakup_bonus, score, tier,
+        )
+
+        threat_score = ThreatScore(
+            object_id=object_id,
+            score=round(score, 2),
+            tier=tier,
+            intent_score=0.0,
+            anomaly_score=0.0,
+            proximity_score=round(proximity_score, 2),
+            pattern_score=0.0,
+            contributing_factors=factors,
+            explanation=explanation,
+        )
+
+        latency = (time.perf_counter() - t0) * 1000.0
+
+        return ThreatAssessment(
+            object_id=object_id,
+            maneuver_class=0,
+            maneuver_name="Normal",
+            maneuver_confidence=1.0,
+            maneuver_probabilities=None,
+            intent_result=None,
+            anomaly_result=None,
+            threat_score=threat_score,
+            latency_ms=latency,
+            num_observations=n,
+            observation_window_s=float(timestamps[-1] - timestamps[0]) if n >= 2 else 0.0,
+        )
+
+    @staticmethod
+    def _build_passive_explanation(
+        object_type: str,
+        nearest_asset: str,
+        nearest_dist: float,
+        proximity_score: float,
+        breakup_bonus: float,
+        score: float,
+        tier: "ThreatTier",
+    ) -> str:
+        """Build a contextual explanation for debris/rocket body assessment."""
+        type_label = "Debris" if object_type == "DEBRIS" else "Rocket body"
+        parts = []
+
+        # What is this object?
+        if object_type == "DEBRIS":
+            parts.append(
+                f"This is tracked orbital debris — a non-maneuverable fragment "
+                f"that poses a passive collision risk. Intent and maneuver analysis "
+                f"are not applicable (debris cannot change its orbit)."
+            )
+        else:
+            parts.append(
+                f"This is a spent rocket body — a large, non-maneuverable object. "
+                f"Rocket bodies carry additional risk because pressurized fuel tanks "
+                f"can fragment unpredictably, generating new debris fields."
+            )
+
+        # Proximity context
+        if nearest_dist < float("inf"):
+            if nearest_dist < 100:
+                parts.append(
+                    f"CLOSE APPROACH: Currently {nearest_dist:.0f} km from "
+                    f"{nearest_asset}. At this range, even small tracking "
+                    f"uncertainties could mask a collision trajectory."
+                )
+            elif nearest_dist < 500:
+                parts.append(
+                    f"Within warning radius of {nearest_asset} at "
+                    f"{nearest_dist:.0f} km. Orbital mechanics could bring this "
+                    f"object closer on subsequent passes."
+                )
+            elif nearest_dist < 2000:
+                parts.append(
+                    f"Nearest protected asset is {nearest_asset} at "
+                    f"{nearest_dist:.0f} km — outside the 500 km warning radius "
+                    f"but within monitoring range."
+                )
+            else:
+                parts.append(
+                    f"Nearest protected asset is {nearest_asset} at "
+                    f"{nearest_dist:.0f} km — well outside the 500 km warning "
+                    f"radius. No conjunction risk at this time."
+                )
+        else:
+            parts.append("No protected assets in the same orbital regime.")
+
+        # Tier context
+        tier_val = tier.value if hasattr(tier, "value") else str(tier)
+        if tier_val == "MINIMAL":
+            parts.append(
+                f"Threat score: {score:.0f}/100 ({tier_val}). No action required."
+            )
+        elif tier_val == "LOW":
+            parts.append(
+                f"Threat score: {score:.0f}/100 ({tier_val}). Logged for periodic review."
+            )
+        elif tier_val == "MODERATE":
+            parts.append(
+                f"Threat score: {score:.0f}/100 ({tier_val}). Active monitoring recommended "
+                f"— track this object through its next orbital pass."
+            )
+        elif tier_val in ("ELEVATED", "CRITICAL"):
+            parts.append(
+                f"Threat score: {score:.0f}/100 ({tier_val}). Collision avoidance "
+                f"maneuver may be required for the threatened asset."
+            )
+
+        return "\n".join(parts)
 
     def assess_batch(
         self,

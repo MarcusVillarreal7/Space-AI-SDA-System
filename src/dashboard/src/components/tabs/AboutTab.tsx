@@ -27,6 +27,7 @@ type DataSource = {
   time_start: string;
   time_end: string;
   regimes: Record<string, number>;
+  object_types?: Record<string, number>;
   scenarios_injected: number;
   scenario_objects: string;
 };
@@ -116,6 +117,20 @@ export function AboutTab() {
                 ))}
               </div>
             </div>
+
+            {ds.object_types && Object.keys(ds.object_types).length > 0 && (
+              <div>
+                <span className="text-[10px] text-slate-500 uppercase">Object Type Breakdown</span>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-1">
+                  {Object.entries(ds.object_types).sort((a, b) => b[1] - a[1]).map(([type, count]) => (
+                    <div key={type} className="flex justify-between text-xs">
+                      <span className="text-slate-400">{type === 'PAYLOAD' ? 'Satellite' : type === 'DEBRIS' ? 'Debris' : type === 'ROCKET_BODY' ? 'Rocket Body' : type}</span>
+                      <span className="text-slate-300 font-mono">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div>
               <span className="text-[10px] text-slate-500 uppercase">Injected Scenarios</span>

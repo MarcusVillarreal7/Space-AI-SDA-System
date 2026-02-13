@@ -30,11 +30,13 @@ class ProximityContext:
     nearest_asset: Optional[Asset]
     distance_km: float              # Euclidean distance to nearest asset
     closing_rate_km_s: float        # Negative = approaching
-    time_to_closest_approach_s: float  # Estimated TCA (≥0, INF if diverging)
-    is_approaching: bool            # True if closing_rate < 0
-    regime_match: bool              # Object in same orbital regime as asset
-    object_regime: OrbitalRegime
-    assets_in_range: int            # Number of assets within warning radius
+    relative_speed_km_s: float = 0.0  # Total relative velocity magnitude
+    time_to_closest_approach_s: float = float("inf")  # Estimated TCA (≥0, INF if diverging)
+    is_approaching: bool = False    # True if closing_rate < 0
+    is_coorbital: bool = False      # True if relative speed < threshold (co-moving)
+    regime_match: bool = False      # Object in same orbital regime as asset
+    object_regime: OrbitalRegime = OrbitalRegime.UNKNOWN
+    assets_in_range: int = 0       # Number of assets within warning radius
 
 
 def classify_regime(position_km: Tuple[float, float, float]) -> OrbitalRegime:
@@ -117,12 +119,22 @@ def compute_proximity(
     regime_match = obj_regime == nearest.regime
     assets_in_range = len(catalog.within_range(position_km, warning_radius_km))
 
+    # Total relative speed — determines if object is co-orbital (< 1 km/s)
+    # or on a crossing/flyby trajectory (> 1 km/s).
+    # Co-orbital thresholds: GEO ~0.01 km/s, LEO ~0.5 km/s.
+    # A generous 1.0 km/s catches rendezvous approaches (slowing down).
+    relative_speed = float(np.linalg.norm(rel_vel))
+    co_orbital_threshold = 1.0  # km/s
+    is_coorbital = relative_speed < co_orbital_threshold
+
     return ProximityContext(
         nearest_asset=nearest,
         distance_km=distance,
         closing_rate_km_s=closing_rate,
+        relative_speed_km_s=relative_speed,
         time_to_closest_approach_s=tca,
         is_approaching=closing_rate < 0,
+        is_coorbital=is_coorbital,
         regime_match=regime_match,
         object_regime=obj_regime,
         assets_in_range=assets_in_range,

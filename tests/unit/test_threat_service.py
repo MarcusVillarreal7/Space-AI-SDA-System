@@ -54,6 +54,48 @@ class TestThreatServiceAssessment:
                 assert result["object_id"] == 42
                 assert result["threat_tier"] == "MINIMAL"
 
+    def test_assess_debris_returns_collision_only(self):
+        """Debris should get collision-only assessment (skips CNN-LSTM, intent, anomaly)."""
+        service = ThreatService()
+
+        positions = np.random.randn(20, 3) * 7000
+        velocities = np.random.randn(20, 3) * 7
+        timestamps = np.arange(20, dtype=float) * 60
+
+        with patch("src.api.threat_service.get_cached_assessment", return_value=None):
+            with patch("src.api.threat_service.cache_assessment"):
+                result = service.assess_object(
+                    42, positions, velocities, timestamps,
+                    use_cache=False, object_type="DEBRIS",
+                )
+        assert result["object_id"] == 42
+        assert result["intent_score"] == 0.0
+        assert result["anomaly_score"] == 0.0
+        assert result["pattern_score"] == 0.0
+        assert result["maneuver_class"] == "Normal"
+        assert "debris" in result["explanation"].lower()
+        assert "non-maneuverable" in result["explanation"].lower()
+
+    def test_assess_rocket_body_returns_collision_only(self):
+        """Rocket bodies should get collision-only assessment with breakup bonus."""
+        service = ThreatService()
+
+        positions = np.random.randn(20, 3) * 7000
+        velocities = np.random.randn(20, 3) * 7
+        timestamps = np.arange(20, dtype=float) * 60
+
+        with patch("src.api.threat_service.get_cached_assessment", return_value=None):
+            with patch("src.api.threat_service.cache_assessment"):
+                result = service.assess_object(
+                    42, positions, velocities, timestamps,
+                    use_cache=False, object_type="ROCKET_BODY",
+                )
+        assert result["object_id"] == 42
+        assert result["intent_score"] == 0.0
+        assert result["anomaly_score"] == 0.0
+        assert result["maneuver_class"] == "Normal"
+        assert "rocket body" in result["explanation"].lower()
+
     def test_assess_uses_cache(self):
         service = ThreatService()
         cached = {

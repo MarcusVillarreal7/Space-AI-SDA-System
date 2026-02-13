@@ -21,6 +21,7 @@ class MockCatalog:
         self.n_timesteps = n_timesteps
         self.object_ids = np.arange(n_objects, dtype=int)
         self.object_names = [f"SAT-{i}" for i in range(n_objects)]
+        self.object_types = ["PAYLOAD"] * n_objects
         self.regimes = ["LEO"] * n_objects
         self.positions = np.random.randn(n_objects, n_timesteps, 3) * 7000
         self.velocities = np.random.randn(n_objects, n_timesteps, 3) * 7
@@ -77,6 +78,24 @@ class TestScenarioInjector:
         for i, name in enumerate(expected_names):
             idx = catalog.get_object_index(990 + i)
             assert catalog.object_names[idx] == name
+
+    def test_inject_sets_object_types(self):
+        """Injected objects should have correct object types (993=DEBRIS, others=PAYLOAD)."""
+        from src.api.scenario_injector import ScenarioInjector
+        catalog = MockCatalog()
+
+        with patch("src.api.scenario_injector.ScenarioInjector._recompute_geodetic"):
+            injector = ScenarioInjector()
+            injector.inject(catalog)
+
+        for oid in range(990, 997):
+            idx = catalog.get_object_index(oid)
+            if oid == 993:
+                assert catalog.object_types[idx] == "DEBRIS", \
+                    f"Object 993 (DEBRIS-KZ-1A) should be DEBRIS"
+            else:
+                assert catalog.object_types[idx] == "PAYLOAD", \
+                    f"Object {oid} should be PAYLOAD"
 
     def test_inject_positions_change(self):
         """Injected objects should have different position arrays."""

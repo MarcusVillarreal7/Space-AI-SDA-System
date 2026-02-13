@@ -60,7 +60,11 @@ async def assess_object(object_id: int):
     # Use last 20 observations for assessment
     window = min(20, len(timestamps))
 
-    logger.info("Assessment requested for object %d (window=%d obs)", object_id, window)
+    # Look up object type for type-aware assessment routing
+    summary = catalog.get_object_summary(object_id)
+    object_type = summary.get("object_type", "PAYLOAD") if summary else "PAYLOAD"
+
+    logger.info("Assessment requested for object %d (window=%d obs, type=%s)", object_id, window, object_type)
 
     result = service.assess_object(
         object_id,
@@ -70,11 +74,12 @@ async def assess_object(object_id: int):
         full_positions=positions,
         full_velocities=velocities,
         full_timestamps=timestamps,
+        object_type=object_type,
     )
 
-    # Add object name
-    summary = catalog.get_object_summary(object_id)
+    # Add object name and type
     result["object_name"] = summary["name"] if summary else f"Object-{object_id}"
+    result["object_type"] = object_type
 
     logger.info(
         "Assessment complete: object %d → %s (score=%.1f)",

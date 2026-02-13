@@ -109,6 +109,7 @@ async def broadcast_positions(timestep: int) -> None:
         {
             "id": p["id"],
             "name": p["name"],
+            "object_type": p.get("object_type", "PAYLOAD"),
             "lat": round(p["lat"], 4),
             "lon": round(p["lon"], 4),
             "alt_km": round(p["alt_km"], 2),

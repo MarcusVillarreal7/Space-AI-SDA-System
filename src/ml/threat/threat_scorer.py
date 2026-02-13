@@ -222,6 +222,8 @@ class ThreatScorer:
         object_id: str,
         intent_result: Optional[IntentResult] = None,
         anomaly_result: Optional[AnomalyResult] = None,
+        maneuver_class: int = 0,
+        maneuver_confidence: float = 0.0,
     ) -> ThreatScore:
         """
         Compute composite threat score from available inputs.
@@ -268,6 +270,8 @@ class ThreatScorer:
             factors=factors,
             intent_result=intent_result,
             anomaly_result=anomaly_result,
+            maneuver_class=maneuver_class,
+            maneuver_confidence=maneuver_confidence,
         )
 
         return ThreatScore(

@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-02-11T18:26:26",
+  "timestamp": "2026-02-11T21:06:07",
   "checks": {
     "checkpoints": {
       "maneuver_classifier": true,
@@ -34,12 +34,12 @@
         0.114377960562706,
         0.11458801478147507
       ],
-      "latency_ms": 4.54
+      "latency_ms": 14.76
     },
     "collision_inference": {
-      "risk": 0.1566,
-      "ttca": 1.94,
-      "miss_distance": 0.88
+      "risk": 0.0381,
+      "ttca": 5.35,
+      "miss_distance": 1.87
     },
     "normal_objects": {
       "total": 990,
@@ -58,9 +58,9 @@
     "passed": 54,
     "warned": 3,
     "failed": 0,
-    "total_time_s": 8.61,
-    "mean_latency_ms": 7.04,
-    "p95_latency_ms": 7.53,
+    "total_time_s": 9.93,
+    "mean_latency_ms": 8.16,
+    "p95_latency_ms": 10.68,
     "neural_classifier_used": 1000,
     "scenarios_triggered": 7,
     "tier_distribution": {

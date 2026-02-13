@@ -97,6 +97,7 @@ class ThreatService:
         full_positions: Optional[np.ndarray] = None,
         full_velocities: Optional[np.ndarray] = None,
         full_timestamps: Optional[np.ndarray] = None,
+        object_type: str = "PAYLOAD",
     ) -> dict:
         """
         Assess a single object, with optional caching.
@@ -121,11 +122,12 @@ class ThreatService:
             float(timestamps[-1] - timestamps[0]) if len(timestamps) >= 2 else 0,
         )
 
-        assessment = self._pipeline.assess(
+        assessment = self._pipeline.assess_by_type(
             object_id=str(object_id),
             positions=positions,
             velocities=velocities,
             timestamps=timestamps,
+            object_type=object_type,
             full_positions=full_positions,
             full_velocities=full_velocities,
             full_timestamps=full_timestamps,
@@ -201,6 +203,12 @@ class ThreatService:
                 continue
             positions, velocities, ts = data
 
+            # Look up object type
+            idx = catalog.get_object_index(oid)
+            obj_type = (catalog.object_types[idx]
+                        if hasattr(catalog, "object_types") and catalog.object_types and idx is not None
+                        else "PAYLOAD")
+
             # Use a window of recent observations for classification,
             # but pass the full trajectory for proximity scanning.
             window = min(20, len(ts))
@@ -213,6 +221,7 @@ class ThreatService:
                 full_positions=positions,
                 full_velocities=velocities,
                 full_timestamps=ts,
+                object_type=obj_type,
             )
             results.append(result)
 
@@ -344,6 +353,13 @@ class ThreatService:
                         continue
                     positions, velocities, ts = data
                     window = min(20, len(ts))
+
+                    # Look up object type
+                    idx = catalog.get_object_index(oid)
+                    obj_type = (catalog.object_types[idx]
+                                if hasattr(catalog, "object_types") and catalog.object_types and idx is not None
+                                else "PAYLOAD")
+
                     result = self.assess_object(
                         oid,
                         positions[-window:],
@@ -354,6 +370,7 @@ class ThreatService:
                         full_positions=positions,
                         full_velocities=velocities,
                         full_timestamps=ts,
+                        object_type=obj_type,
                     )
                     self._assess_all_completed += 1
 

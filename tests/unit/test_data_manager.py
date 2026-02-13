@@ -108,6 +108,11 @@ class TestSpaceCatalogLoading:
         assert len(catalog.regimes) == 1000
         assert all(r in ("LEO", "MEO", "GEO", "HEO") for r in catalog.regimes)
 
+    def test_object_types_loaded(self, catalog):
+        assert len(catalog.object_types) == 1000
+        # All types should be valid
+        assert all(t in ("PAYLOAD", "DEBRIS", "ROCKET_BODY") for t in catalog.object_types)
+
     def test_time_isos(self, catalog):
         assert len(catalog.time_isos) == 1440
         assert "2026-02-07" in catalog.time_isos[0]
@@ -129,6 +134,7 @@ class TestSpaceCatalogQueries:
         assert "lon" in positions[0]
         assert "alt_km" in positions[0]
         assert "name" in positions[0]
+        assert "object_type" in positions[0]
 
     def test_get_all_positions_clamps_timestep(self, catalog):
         positions = catalog.get_all_positions_at_timestep(99999)
@@ -161,6 +167,7 @@ class TestSpaceCatalogQueries:
         assert summary is not None
         assert summary["id"] == 0
         assert summary["name"] == "CALSPHERE 1"
+        assert summary["object_type"] in ("PAYLOAD", "DEBRIS", "ROCKET_BODY")
         assert summary["regime"] in ("LEO", "MEO", "GEO", "HEO")
         assert summary["altitude_km"] > 0
 
@@ -170,6 +177,7 @@ class TestSpaceCatalogQueries:
     def test_get_all_summaries(self, catalog):
         summaries = catalog.get_all_summaries()
         assert len(summaries) == 1000
+        assert "object_type" in summaries[0]
 
     def test_get_positions_and_velocities(self, catalog):
         result = catalog.get_positions_and_velocities(0)
@@ -194,6 +202,7 @@ class TestSpaceCatalogEmpty:
     def test_not_loaded(self):
         cat = SpaceCatalog()
         assert cat.is_loaded is False
+        assert cat.object_types == []
         assert cat.get_all_positions_at_timestep(0) == []
 
     def test_file_not_found(self):

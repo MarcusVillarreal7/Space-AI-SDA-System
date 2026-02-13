@@ -3,8 +3,8 @@ import { useSimStore } from '../store/useSimStore';
 import { api } from '../services/api';
 import { TierBadge } from './TierBadge';
 import { ScoreGauge } from './ScoreGauge';
-import type { ThreatAssessment, ObjectDetail as ObjectDetailType } from '../types';
-import { TIER_COLORS } from '../types';
+import type { ThreatAssessment, ObjectDetail as ObjectDetailType, ObjectType } from '../types';
+import { TIER_COLORS, OBJECT_TYPE_LABELS, OBJECT_TYPE_COLORS } from '../types';
 import {
   LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip,
   BarChart, Bar, Cell,
@@ -71,9 +71,23 @@ export function ObjectDetail() {
       {/* Header */}
       <div className="p-4 border-b border-space-700 flex items-start justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-slate-200">
-            {detail?.name || `Object ${selectedObjectId}`}
-          </h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-slate-200">
+              {detail?.name || `Object ${selectedObjectId}`}
+            </h3>
+            {detail?.object_type && (
+              <span
+                className="px-1.5 py-0.5 rounded text-[10px] font-medium border"
+                style={{
+                  color: OBJECT_TYPE_COLORS[detail.object_type as ObjectType] ?? '#6b7280',
+                  borderColor: (OBJECT_TYPE_COLORS[detail.object_type as ObjectType] ?? '#6b7280') + '40',
+                  backgroundColor: (OBJECT_TYPE_COLORS[detail.object_type as ObjectType] ?? '#6b7280') + '15',
+                }}
+              >
+                {OBJECT_TYPE_LABELS[detail.object_type as ObjectType] ?? detail.object_type}
+              </span>
+            )}
+          </div>
           <p className="text-xs text-slate-500">
             ID: {selectedObjectId} | {detail?.regime || '--'} | {detail?.altitude_km?.toFixed(0)} km
           </p>
@@ -127,11 +141,30 @@ export function ObjectDetail() {
               </ul>
             </div>
           )}
+          {assessment.explanation && (
+            <div className="mt-3 p-2 bg-space-700/40 rounded border border-space-600">
+              <span className="text-xs text-slate-500 font-medium block mb-1">Analysis:</span>
+              {assessment.explanation.split('\n').map((line, i) => (
+                <p key={i} className="text-xs text-slate-400 leading-relaxed">
+                  {line}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Maneuver Classification Probabilities */}
-      {maneuverData && (
+      {/* Collision-only note for non-PAYLOAD objects */}
+      {detail?.object_type && detail.object_type !== 'PAYLOAD' && (
+        <div className="px-4 py-2 border-b border-space-700 bg-space-700/30">
+          <p className="text-[10px] text-slate-400 italic">
+            Collision-only assessment (passive object) — maneuver classification and intent analysis skipped.
+          </p>
+        </div>
+      )}
+
+      {/* Maneuver Classification Probabilities (PAYLOAD only) */}
+      {maneuverData && (!detail?.object_type || detail.object_type === 'PAYLOAD') && (
         <div className="p-4 border-b border-space-700">
           <span className="text-xs font-semibold text-slate-400 uppercase mb-2 block">
             CNN-LSTM Classification

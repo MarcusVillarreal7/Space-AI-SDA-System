@@ -75,6 +75,7 @@ export const api = {
     time_start: string;
     time_end: string;
     regimes: Record<string, number>;
+    object_types?: Record<string, number>;
     scenarios_injected: number;
     scenario_objects: string;
   }>('/data-source'),

@@ -198,8 +198,9 @@ class TestThreatEscalation:
         )
         proximity = ProximityContext(
             nearest_asset=asset, distance_km=100.0,  # within 200 km
-            closing_rate_km_s=0.0, time_to_closest_approach_s=float("inf"),
-            is_approaching=False, regime_match=True,
+            closing_rate_km_s=0.0, relative_speed_km_s=0.1,
+            time_to_closest_approach_s=float("inf"),
+            is_approaching=False, is_coorbital=True, regime_match=True,
             object_regime=OrbitalRegime.LEO, assets_in_range=1,
         )
         assert escalator.is_shadowing_pattern(history, proximity)

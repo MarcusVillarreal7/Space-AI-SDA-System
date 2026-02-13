@@ -104,8 +104,11 @@ class ThreatEscalator:
     ) -> bool:
         """
         Detect shadowing: sustained station-keeping near a high-value asset.
+        Requires co-orbital relative speed — high-speed flybys are not shadowing.
         """
         if proximity.distance_km > self.shadowing_range_km:
+            return False
+        if not proximity.is_coorbital:
             return False
 
         sk_class = 2  # Station-keeping

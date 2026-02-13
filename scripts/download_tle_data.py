@@ -31,6 +31,13 @@ TLE_SOURCES = {
     "dmc": "https://celestrak.org/NORAD/elements/gp.php?GROUP=dmc&FORMAT=tle",
     "tdrss": "https://celestrak.org/NORAD/elements/gp.php?GROUP=tdrss&FORMAT=tle",
     "geo": "https://celestrak.org/NORAD/elements/gp.php?GROUP=geo&FORMAT=tle",
+    # Debris fields — fragments from major breakup events
+    "cosmos-2251-deb": "https://celestrak.org/NORAD/elements/gp.php?GROUP=cosmos-2251-debris&FORMAT=tle",
+    "fengyun-1c-deb": "https://celestrak.org/NORAD/elements/gp.php?GROUP=fengyun-1c-debris&FORMAT=tle",
+    "iridium-33-deb": "https://celestrak.org/NORAD/elements/gp.php?GROUP=iridium-33-debris&FORMAT=tle",
+    "indian-asat-deb": "https://celestrak.org/NORAD/elements/gp.php?GROUP=indian-asat-debris&FORMAT=tle",
+    # Recent launches (mix of payloads + rocket bodies)
+    "last-30-days": "https://celestrak.org/NORAD/elements/gp.php?GROUP=last-30-days&FORMAT=tle",
 }
 
 
@@ -113,8 +120,7 @@ def main():
     parser.add_argument(
         "--categories",
         nargs="+",
-        choices=list(TLE_SOURCES.keys()),
-        help="Categories to download (default: all)"
+        help=f"Categories to download (default: all). Available: {', '.join(TLE_SOURCES.keys())}"
     )
     parser.add_argument(
         "--output-dir",
