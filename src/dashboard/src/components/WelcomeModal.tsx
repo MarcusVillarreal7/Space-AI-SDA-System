@@ -102,6 +102,39 @@ export function WelcomeModal() {
             </div>
           </div>
 
+          {/* Simulation Playback */}
+          <div>
+            <h3 className="text-xs font-semibold text-slate-300 uppercase mb-1">Simulation Playback</h3>
+            <p>
+              The dataset contains <strong>1,440 timesteps</strong> spanning a 24-hour orbital window
+              (1 timestep = 1 minute of simulated time). The playback bar at the bottom replays this
+              window like a DVR — each tick advances all 1,000 objects to their next orbital position
+              and broadcasts updated coordinates via WebSocket.
+            </p>
+            <div className="grid grid-cols-4 gap-1 mt-2 text-center text-xs">
+              <div className="bg-space-900/60 rounded p-1.5">
+                <span className="text-blue-400 font-semibold">1x</span>
+                <p className="text-[10px] text-slate-500">Real time</p>
+                <p className="text-[10px] text-slate-500">24h playback</p>
+              </div>
+              <div className="bg-space-900/60 rounded p-1.5">
+                <span className="text-blue-400 font-semibold">10x</span>
+                <p className="text-[10px] text-slate-500">10 min/sec</p>
+                <p className="text-[10px] text-slate-500">2.4h playback</p>
+              </div>
+              <div className="bg-space-900/60 rounded p-1.5">
+                <span className="text-blue-400 font-semibold">60x</span>
+                <p className="text-[10px] text-slate-500">1 hour/sec</p>
+                <p className="text-[10px] text-slate-500">24 min playback</p>
+              </div>
+              <div className="bg-space-900/60 rounded p-1.5">
+                <span className="text-blue-400 font-semibold">360x</span>
+                <p className="text-[10px] text-slate-500">6 hours/sec</p>
+                <p className="text-[10px] text-slate-500">4 min playback</p>
+              </div>
+            </div>
+          </div>
+
           {/* Scenarios */}
           <div>
             <h3 className="text-xs font-semibold text-slate-300 uppercase mb-1">Injected Threat Scenarios</h3>
