@@ -28,10 +28,11 @@ logs/
 *.swo
 .cursor/
 
-# Models
+# Models / Checkpoints
 models/*.pth
 models/*.pkl
 *.weights
+checkpoints/
 
 # OS
 .DS_Store
@@ -48,6 +49,13 @@ Thumbs.db
 # Docker
 *.log
 docker-compose.override.yml
+
+# Coverage
+.coverage
+htmlcov/
+
+# Results (generated)
+results/model_showcase/
 
 # Distribution
 dist/
