@@ -3,6 +3,7 @@ import { useWebSocket } from './services/websocket';
 import { useSimStore } from './store/useSimStore';
 import { api } from './services/api';
 import { Header } from './components/Header';
+import { WelcomeModal } from './components/WelcomeModal';
 import { Globe } from './components/Globe';
 import { PlaybackControls } from './components/PlaybackControls';
 import { ThreatSummary } from './components/ThreatSummary';
@@ -99,6 +100,7 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen bg-space-900">
+      <WelcomeModal />
       <Header />
       <div className="flex flex-1 min-h-0">
         {/* Globe area */}
