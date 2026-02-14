@@ -16,7 +16,7 @@ from typing import Optional
 
 import numpy as np
 
-from src.api.database import cache_assessment, get_cached_assessment, store_alert
+from src.api.database import cache_assessment, get_cached_assessment, log_prediction, store_alert
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +162,30 @@ class ThreatService:
 
         # Cache the result
         cache_assessment(object_id, timestep, result)
+
+        # Log prediction for monitoring/audit
+        try:
+            # Resolve object name from catalog
+            from src.api.main import app_state
+            catalog = app_state.get("catalog")
+            idx = catalog.get_object_index(object_id) if catalog else None
+            obj_name = catalog.object_names[idx] if (catalog and idx is not None) else f"Object-{object_id}"
+            obj_type_str = (catalog.object_types[idx]
+                            if (catalog and idx is not None and catalog.object_types)
+                            else object_type)
+            log_prediction(
+                object_id=object_id,
+                object_name=obj_name,
+                object_type=obj_type_str,
+                threat_tier=result["threat_tier"],
+                threat_score=result["threat_score"],
+                maneuver_class=result.get("maneuver_class"),
+                anomaly_score=result.get("anomaly_score"),
+                proximity_score=result.get("proximity_score"),
+                latency_ms=result.get("latency_ms", elapsed_ms),
+            )
+        except Exception:
+            logger.debug("Failed to log prediction for object %d", object_id, exc_info=True)
 
         # Store in memory
         self._assessments[object_id] = result
