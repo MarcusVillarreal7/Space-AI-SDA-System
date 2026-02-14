@@ -23,3 +23,6 @@ notebook==7.0.7
 memory-profiler==0.61.0
 py-spy==0.3.14
 line-profiler==4.1.1
+
+# Data Versioning
+dvc>=3.0.0

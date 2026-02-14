@@ -1,0 +1,52 @@
+stages:
+  download-tles:
+    cmd: python scripts/download_tle_data.py --categories active cosmos-2251-deb fengyun-1c-deb iridium-33-deb indian-asat-deb last-30-days
+    outs:
+      - data/raw/active.tle
+      - data/raw/cosmos-2251-deb.tle
+      - data/raw/fengyun-1c-deb.tle
+
+  build-catalog:
+    cmd: python scripts/build_mixed_catalog.py --seed 42 --generate
+    deps:
+      - data/raw/
+      - scripts/build_mixed_catalog.py
+    outs:
+      - data/processed/ml_train_1k/ground_truth.parquet
+
+  train-transformer:
+    cmd: python scripts/train_trajectory_parallel.py
+    deps:
+      - data/processed/ml_train_1k/
+      - src/ml/models/trajectory_transformer.py
+    outs:
+      - checkpoints/phase3_parallel/best_model.pt
+    metrics:
+      - checkpoints/phase3_parallel/training_summary.json:
+          cache: false
+
+  train-maneuver:
+    cmd: python scripts/retrain_maneuver_classifier.py
+    deps:
+      - src/ml/models/maneuver_classifier.py
+    outs:
+      - checkpoints/phase3_day4/maneuver_classifier.pt
+
+  train-anomaly:
+    cmd: python scripts/train_anomaly_autoencoder.py
+    deps:
+      - data/processed/ml_train_1k/
+      - src/ml/anomaly/
+    outs:
+      - checkpoints/phase3_anomaly/autoencoder.pt
+
+  validate:
+    cmd: python scripts/run_e2e_validation.py
+    deps:
+      - checkpoints/phase3_parallel/best_model.pt
+      - checkpoints/phase3_day4/maneuver_classifier.pt
+      - checkpoints/phase3_anomaly/autoencoder.pt
+      - src/ml/threat_assessment.py
+    metrics:
+      - results/validation_report.json:
+          cache: false
