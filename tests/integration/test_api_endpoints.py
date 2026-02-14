@@ -158,11 +158,75 @@ class TestMetricsEndpoint:
         assert data["uptime_seconds"] >= 0
 
 
+class TestMonitoringEndpoints:
+    def test_monitoring_predictions_empty(self, client):
+        """GET /api/monitoring/predictions returns list (may be empty initially)."""
+        r = client.get("/api/monitoring/predictions?limit=10")
+        assert r.status_code == 200
+        data = r.json()
+        assert isinstance(data, list)
+
+    def test_monitoring_stats(self, client):
+        """GET /api/monitoring/stats returns aggregate stats."""
+        r = client.get("/api/monitoring/stats")
+        assert r.status_code == 200
+        data = r.json()
+        assert "total_predictions" in data
+        assert "avg_latency_ms" in data
+        assert "tier_distribution" in data
+        assert "type_distribution" in data
+        assert isinstance(data["tier_distribution"], dict)
+
+    def test_monitoring_ingestions_empty(self, client):
+        """GET /api/monitoring/ingestions returns list."""
+        r = client.get("/api/monitoring/ingestions?limit=10")
+        assert r.status_code == 200
+        data = r.json()
+        assert isinstance(data, list)
+
+    def test_monitoring_predictions_after_assess(self, client):
+        """After assessing an object, prediction log should have an entry."""
+        # Trigger an assessment (which logs a prediction)
+        r = client.get("/api/threat/object/0")
+        assert r.status_code == 200
+
+        # Now check monitoring
+        r = client.get("/api/monitoring/predictions?limit=5")
+        assert r.status_code == 200
+        data = r.json()
+        assert len(data) >= 1
+        entry = data[0]
+        assert "object_id" in entry
+        assert "threat_tier" in entry
+        assert "latency_ms" in entry
+        assert "timestamp" in entry
+
+
+class TestIngestionEndpoints:
+    def test_ingestion_status(self, client):
+        """GET /api/ingest/status returns counts."""
+        r = client.get("/api/ingest/status")
+        assert r.status_code == 200
+        data = r.json()
+        assert "ingested_count" in data
+        assert "catalog_size" in data
+        assert data["catalog_size"] >= 1000
+
+    def test_ingest_tle_bad_data(self, client):
+        """POST /api/ingest/tle with invalid TLE returns 400."""
+        r = client.post("/api/ingest/tle", json={
+            "name": "BAD SAT",
+            "tle_line1": "invalid line 1",
+            "tle_line2": "invalid line 2",
+        })
+        assert r.status_code == 400
+
+
 class TestWebSocketConnection:
     def test_websocket_connect(self, client):
         with client.websocket_connect("/api/ws") as ws:
             data = ws.receive_json()
             assert data["type"] == "positions"
-            assert len(data["objects"]) == 1000
+            assert len(data["objects"]) >= 1000
             assert "lat" in data["objects"][0]
             assert "lon" in data["objects"][0]
