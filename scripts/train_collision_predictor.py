@@ -21,6 +21,12 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
+try:
+    import mlflow
+    HAS_MLFLOW = True
+except ImportError:
+    HAS_MLFLOW = False
+
 # Project imports
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.ml.models.collision_predictor import CollisionPredictor, CollisionPredictorConfig
@@ -279,6 +285,18 @@ def train():
     CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
     best_val_loss = float("inf")
 
+    if HAS_MLFLOW:
+        mlflow.set_experiment("sda-collision-predictor")
+        mlflow.start_run()
+        mlflow.log_params({
+            "lr": LR,
+            "batch_size": BATCH_SIZE,
+            "epochs": EPOCHS,
+            "n_positive": N_POSITIVE,
+            "n_negative": N_NEGATIVE,
+            "n_params": n_params,
+        })
+
     print(f"\nTraining for {EPOCHS} epochs (batch_size={BATCH_SIZE}, lr={LR})...\n")
 
     for epoch in range(EPOCHS):
@@ -346,6 +364,9 @@ def train():
         avg_val = val_loss / max(val_batches, 1)
         scheduler.step(avg_val)
 
+        if HAS_MLFLOW:
+            mlflow.log_metrics({"train_loss": avg_train, "val_loss": avg_val}, step=epoch)
+
         # Save best
         if avg_val < best_val_loss:
             best_val_loss = avg_val
@@ -369,6 +390,11 @@ def train():
         "epoch": EPOCHS,
         "val_loss": avg_val,
     }, CHECKPOINT_DIR / "final_model.pt")
+
+    if HAS_MLFLOW:
+        mlflow.log_metrics({"best_val_loss": best_val_loss})
+        mlflow.pytorch.log_model(model, "model")
+        mlflow.end_run()
 
     total_time = time.time() - t0
     print(f"\nTraining complete in {total_time:.1f}s")

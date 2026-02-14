@@ -27,6 +27,12 @@ from datetime import datetime
 from tqdm import tqdm
 import gc
 
+try:
+    import mlflow
+    HAS_MLFLOW = True
+except ImportError:
+    HAS_MLFLOW = False
+
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
@@ -282,6 +288,20 @@ def main():
     logger.info("TRAINING")
     logger.info("=" * 70)
 
+    # MLflow experiment tracking
+    if HAS_MLFLOW:
+        mlflow.set_experiment("sda-trajectory-transformer")
+        mlflow.start_run()
+        mlflow.log_params({
+            "lr": args.lr,
+            "batch_size": args.batch_size,
+            "epochs": args.epochs,
+            "freeze_epochs": args.freeze_epochs,
+            "encoder_lr_scale": args.encoder_lr_scale,
+            "total_params": total_params,
+            "head_params": head_params,
+        })
+
     best_val_loss = float("inf")
     history = {"train_loss": [], "val_loss": [], "lr": []}
 
@@ -326,6 +346,12 @@ def main():
         logger.info(
             f"Epoch {epoch}: train_loss={train_loss:.6f}  val_loss={val_loss:.6f}  lr={current_lr:.6f}"
         )
+
+        if HAS_MLFLOW:
+            mlflow.log_metrics(
+                {"train_loss": train_loss, "val_loss": val_loss, "lr": current_lr},
+                step=epoch,
+            )
 
         # Checkpointing
         if val_loss < best_val_loss:
@@ -383,6 +409,12 @@ def main():
     }
     with open(output_dir / "training_summary.json", "w") as f:
         json.dump(summary, f, indent=2)
+
+    if HAS_MLFLOW:
+        mlflow.log_metrics({"best_val_loss": best_val_loss})
+        mlflow.log_artifact(str(output_dir / "training_summary.json"))
+        mlflow.pytorch.log_model(model, "model")
+        mlflow.end_run()
 
     logger.info("=" * 70)
     logger.info("TRAINING COMPLETE")

@@ -30,6 +30,12 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from pathlib import Path
 
+try:
+    import mlflow
+    HAS_MLFLOW = True
+except ImportError:
+    HAS_MLFLOW = False
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.ml.models.maneuver_classifier import CNNLSTMManeuverClassifier, CNNLSTMClassifierConfig
@@ -383,6 +389,18 @@ def train(
     print(f"\nTraining {epochs} epochs with patience={patience} on best val_acc...")
     print("-" * 70)
 
+    if HAS_MLFLOW:
+        mlflow.set_experiment("sda-maneuver-classifier")
+        mlflow.start_run()
+        mlflow.log_params({
+            "lr": lr,
+            "batch_size": batch_size,
+            "epochs": epochs,
+            "patience": patience,
+            "n_per_class": n_per_class,
+            "n_params": n_params,
+        })
+
     t_train = time.time()
 
     for epoch in range(epochs):
@@ -436,6 +454,12 @@ def train(
         history["val_loss"].append(val_loss)
         history["val_acc"].append(val_acc)
         history["lr"].append(current_lr)
+
+        if HAS_MLFLOW:
+            mlflow.log_metrics({
+                "train_loss": train_loss, "train_acc": train_acc,
+                "val_loss": val_loss, "val_acc": val_acc, "lr": current_lr,
+            }, step=epoch)
 
         # Check improvement (on val_acc, NOT val_loss)
         improved = ""
@@ -513,6 +537,12 @@ def train(
         print(f"\n⚠ WARNING: Model may have collapsed — only predicts classes {unique_preds}")
     else:
         print(f"\n✓ Model predicts {len(unique_preds)} distinct classes: {unique_preds}")
+
+    if HAS_MLFLOW:
+        mlflow.log_metrics({"best_val_acc": best_val_acc, "best_epoch": best_epoch})
+        mlflow.log_artifact(str(checkpoint_path / "maneuver_classifier_history.json"))
+        mlflow.pytorch.log_model(model, "model")
+        mlflow.end_run()
 
 
 if __name__ == "__main__":

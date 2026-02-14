@@ -27,6 +27,12 @@ import numpy as np
 import pandas as pd
 import torch
 
+try:
+    import mlflow
+    HAS_MLFLOW = True
+except ImportError:
+    HAS_MLFLOW = False
+
 # Ensure project root is on path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -320,6 +326,18 @@ def main():
     print(f"  Parameters: {detector.model.param_count()}")
     print(f"  Epochs: {EPOCHS}, Batch: {BATCH_SIZE}, LR: {LR}")
 
+    if HAS_MLFLOW:
+        mlflow.set_experiment("sda-anomaly-autoencoder")
+        mlflow.start_run()
+        mlflow.log_params({
+            "epochs": EPOCHS,
+            "batch_size": BATCH_SIZE,
+            "lr": LR,
+            "threshold_percentile": THRESHOLD_PERCENTILE,
+            "n_profiles": len(all_profiles),
+            "n_params": detector.model.param_count(),
+        })
+
     t0 = time.time()
     metrics = detector.fit(
         all_profiles,
@@ -425,6 +443,16 @@ def main():
 
     with open(CHECKPOINT_DIR / "training_summary.json", "w") as f:
         json.dump(summary, f, indent=2)
+
+    if HAS_MLFLOW:
+        mlflow.log_metrics({
+            "final_loss": metrics["final_loss"],
+            "fpr": float(fpr),
+            "tpr": float(tpr),
+            "separation_ratio": float(separation),
+        })
+        mlflow.log_artifact(str(CHECKPOINT_DIR / "training_summary.json"))
+        mlflow.end_run()
 
     print(f"\n{'='*60}")
     print("Training complete!")
