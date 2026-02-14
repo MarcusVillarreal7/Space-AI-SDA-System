@@ -27,7 +27,7 @@ def _get_threat_tiers():
 async def list_objects(
     regime: str | None = Query(None, description="Filter by regime: LEO, MEO, GEO, HEO"),
     object_type: str | None = Query(None, description="Filter by type: PAYLOAD, DEBRIS, ROCKET_BODY"),
-    limit: int = Query(1000, ge=1, le=1000),
+    limit: int | None = Query(None, ge=1),
     offset: int = Query(0, ge=0),
 ):
     """List all tracked space objects with summary info."""
@@ -40,7 +40,7 @@ async def list_objects(
     if object_type:
         summaries = [s for s in summaries if s.get("object_type", "PAYLOAD") == object_type.upper()]
 
-    page = summaries[offset:offset + limit]
+    page = summaries[offset:] if limit is None else summaries[offset:offset + limit]
 
     return [
         ObjectSummary(

@@ -15,17 +15,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps (CPU-only torch to keep image small)
-COPY requirements.txt ./
+COPY requirements-docker.txt ./
 RUN pip install --no-cache-dir \
     --index-url https://download.pytorch.org/whl/cpu \
     --extra-index-url https://pypi.org/simple/ \
-    -r requirements.txt
+    -r requirements-docker.txt
 
 # Copy application source
 COPY src/ ./src/
 COPY scripts/ ./scripts/
 COPY checkpoints/ ./checkpoints/
-COPY data/processed/ ./data/processed/
+COPY data/processed/ml_train_1k/ ./data/processed/ml_train_1k/
 
 # Copy built frontend
 COPY --from=frontend-build /app/src/dashboard/dist ./src/dashboard/dist

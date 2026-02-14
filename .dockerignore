@@ -14,4 +14,6 @@ mlruns/
 *.egg-info/
 dist/
 build/
+data/processed/features_1k_chunked/
+data/processed/features_1k/
 .env
