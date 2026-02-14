@@ -32,6 +32,9 @@ DATA_PATH = Path("data/processed/ml_train_1k/ground_truth.parquet")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load data and start services on startup, clean up on shutdown."""
+    from dotenv import load_dotenv
+    load_dotenv()
+
     t0 = time.perf_counter()
     logging.basicConfig(
         level=logging.INFO,
@@ -65,6 +68,10 @@ async def lifespan(app: FastAPI):
     from src.api.conjunction_service import ConjunctionService
     conjunction_service = ConjunctionService(run_interval=10)
     app_state["conjunction_service"] = conjunction_service
+
+    # Initialize ingestion service
+    from src.api.ingestion import IngestionService
+    app_state["ingestion_service"] = IngestionService(catalog)
 
     # Initialize database and clear stale data from previous runs
     init_db()
@@ -123,12 +130,16 @@ from src.api.routes.simulation import router as simulation_router
 from src.api.routes.threat import router as threat_router
 from src.api.routes.websocket import router as ws_router
 from src.api.routes.metrics import router as metrics_router
+from src.api.routes.ingestion import router as ingestion_router
+from src.api.routes.monitoring import router as monitoring_router
 
 app.include_router(objects_router)
 app.include_router(simulation_router)
 app.include_router(threat_router)
 app.include_router(ws_router)
 app.include_router(metrics_router)
+app.include_router(ingestion_router)
+app.include_router(monitoring_router)
 
 
 @app.get("/api/health")
