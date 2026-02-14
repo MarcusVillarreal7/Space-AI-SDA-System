@@ -211,6 +211,62 @@ class SpaceCatalog:
         logger.info("SpaceCatalog loaded in %.2fs (%.1f MB positions)",
                      elapsed, self.positions.nbytes / 1e6)
 
+    def add_object(
+        self,
+        object_id: int,
+        name: str,
+        object_type: str,
+        positions: np.ndarray,
+        velocities: np.ndarray,
+        timestamps: list[pd.Timestamp],
+    ) -> None:
+        """Add a single object to the live catalog.
+
+        Args:
+            object_id: Unique ID for the new object.
+            name: Display name.
+            object_type: PAYLOAD, DEBRIS, or ROCKET_BODY.
+            positions: (N_timesteps, 3) ECI positions in km.
+            velocities: (N_timesteps, 3) ECI velocities in km/s.
+            timestamps: Must match self.timestamps in length.
+        """
+        if len(timestamps) != self.n_timesteps:
+            raise ValueError(
+                f"Timestep count mismatch: got {len(timestamps)}, expected {self.n_timesteps}"
+            )
+
+        # Expand ID array
+        self.object_ids = np.append(self.object_ids, object_id)
+        self.object_names.append(name)
+        self.object_types.append(object_type)
+
+        # Reshape to (1, T, 3) for concatenation
+        pos_3d = positions[np.newaxis, :, :]  # (1, T, 3)
+        vel_3d = velocities[np.newaxis, :, :]
+
+        self.positions = np.concatenate([self.positions, pos_3d], axis=0)
+        self.velocities = np.concatenate([self.velocities, vel_3d], axis=0)
+
+        # Compute geodetic coords for the new object
+        gmst_values = np.array([_compute_gmst(t) for t in self.timestamps])
+        lat, lon, alt = _vectorized_eci_to_geodetic(pos_3d, gmst_values)
+        self.latitudes = np.concatenate([self.latitudes, lat], axis=0)
+        self.longitudes = np.concatenate([self.longitudes, lon], axis=0)
+        self.altitudes = np.concatenate([self.altitudes, alt], axis=0)
+
+        # Reference values at midpoint
+        mid = self.n_timesteps // 2
+        ref_alt = float(alt[0, mid])
+        ref_speed = float(np.linalg.norm(velocities[mid]))
+        self.ref_altitudes = np.append(self.ref_altitudes, ref_alt)
+        self.ref_speeds = np.append(self.ref_speeds, ref_speed)
+
+        self.regimes.append(_classify_regime(ref_alt))
+        self.n_objects += 1
+
+        logger.info("Added object %d (%s) — catalog now has %d objects",
+                     object_id, name, self.n_objects)
+
     def get_all_positions_at_timestep(self, timestep: int) -> list[dict]:
         """Get lat/lon/alt for all objects at a given timestep index."""
         if not self._loaded:

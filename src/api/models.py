@@ -167,3 +167,60 @@ class MetricsResponse(BaseModel):
     avg_api_latency_ms: float
     assessments_completed: int
     uptime_seconds: float
+
+
+# --- Ingestion models ---
+
+class TLEIngestRequest(BaseModel):
+    name: str
+    tle_line1: str
+    tle_line2: str
+
+
+class TLEIngestResponse(BaseModel):
+    object_id: int
+    name: str
+    object_type: str
+    timesteps: int
+    regime: str
+    altitude_km: float
+
+
+class IngestionStatusResponse(BaseModel):
+    ingested_count: int
+    catalog_size: int
+
+
+# --- Monitoring models ---
+
+class PredictionLogResponse(BaseModel):
+    id: int
+    object_id: int
+    object_name: str
+    object_type: str
+    threat_tier: str
+    threat_score: float
+    maneuver_class: Optional[str] = None
+    intent_category: Optional[str] = None
+    anomaly_score: Optional[float] = None
+    proximity_score: Optional[float] = None
+    latency_ms: float
+    model_version: Optional[str] = None
+    timestamp: str
+
+
+class PredictionStatsResponse(BaseModel):
+    total_predictions: int
+    avg_latency_ms: float
+    tier_distribution: dict[str, int]
+    type_distribution: dict[str, int]
+
+
+class IngestionLogResponse(BaseModel):
+    id: int
+    object_id: int
+    object_name: str
+    object_type: str
+    source: str
+    tle_epoch: Optional[str] = None
+    timestamp: str
