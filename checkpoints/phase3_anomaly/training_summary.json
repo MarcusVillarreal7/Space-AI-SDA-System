@@ -1,0 +1,38 @@
+{
+  "training_date": "2026-02-08 00:22:15",
+  "device": "cuda",
+  "gpu": "NVIDIA GeForce RTX 4080 Laptop GPU",
+  "config": {
+    "input_dim": 19,
+    "hidden_dims": [
+      32,
+      16
+    ],
+    "latent_dim": 6,
+    "dropout": 0.1,
+    "negative_slope": 0.01
+  },
+  "training": {
+    "n_profiles": 1000,
+    "epochs": 100,
+    "batch_size": 128,
+    "lr": 0.001,
+    "final_loss": 0.15316622745990754,
+    "training_time_s": 4.505324602127075
+  },
+  "threshold": {
+    "percentile": 95.0,
+    "value": 0.12912763506174085
+  },
+  "evaluation": {
+    "n_normal": 1000,
+    "n_anomalous": 50,
+    "false_positive_rate": 5.0,
+    "true_positive_rate": 100.0,
+    "score_separation_ratio": 759177.8125,
+    "normal_score_mean": 0.10984577238559723,
+    "normal_score_std": 0.575836181640625,
+    "anomaly_score_mean": 83392.4765625,
+    "anomaly_score_std": 133668.140625
+  }
+}

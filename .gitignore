@@ -46,6 +46,9 @@ checkpoints/phase3_day4/*
 !checkpoints/phase3_anomaly/
 checkpoints/phase3_anomaly/*
 !checkpoints/phase3_anomaly/autoencoder.pt
+!checkpoints/phase3_anomaly/anomaly_meta.json
+!checkpoints/phase3_anomaly/training_errors.npy
+!checkpoints/phase3_anomaly/training_summary.json
 !checkpoints/collision_predictor/
 checkpoints/collision_predictor/*
 !checkpoints/collision_predictor/best_model.pt
