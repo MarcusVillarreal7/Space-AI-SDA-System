@@ -9,11 +9,15 @@ env/
 ENV/
 .venv
 
-# Data
-data/
+# Data (ignore all except runtime parquet)
+data/*
+!data/processed/
+data/processed/*
+!data/processed/ml_train_1k/
+data/processed/ml_train_1k/*
+!data/processed/ml_train_1k/ground_truth.parquet
 *.tle
 *.h5
-*.parquet
 *.csv
 
 # Logs
@@ -28,11 +32,23 @@ logs/
 *.swo
 .cursor/
 
-# Models / Checkpoints
+# Models / Checkpoints (ignore all except trained model weights)
 models/*.pth
 models/*.pkl
 *.weights
-checkpoints/
+checkpoints/*
+!checkpoints/phase3_parallel/
+checkpoints/phase3_parallel/*
+!checkpoints/phase3_parallel/best_model.pt
+!checkpoints/phase3_day4/
+checkpoints/phase3_day4/*
+!checkpoints/phase3_day4/maneuver_classifier.pt
+!checkpoints/phase3_anomaly/
+checkpoints/phase3_anomaly/*
+!checkpoints/phase3_anomaly/autoencoder.pt
+!checkpoints/collision_predictor/
+checkpoints/collision_predictor/*
+!checkpoints/collision_predictor/best_model.pt
 
 # OS
 .DS_Store
