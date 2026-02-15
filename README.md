@@ -8,6 +8,8 @@ A production-grade space tracking and threat assessment system that processes 1,
 
 Built as a defense portfolio project demonstrating the full pipeline from raw orbital data to operator-facing threat intelligence.
 
+https://sda-ai-system.up.railway.app/
+
 ## System Architecture
 
 ```
