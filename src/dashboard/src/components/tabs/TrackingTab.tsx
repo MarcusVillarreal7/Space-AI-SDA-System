@@ -11,8 +11,10 @@ type TypeFilter = 'ALL' | ObjectType;
 
 export function TrackingTab() {
   const [allObjects, setAllObjects] = useState<ObjectSummary[]>([]);
-  const [filter, setFilter] = useState('');
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
+  const filter = useSimStore((s) => s.textFilter);
+  const setFilter = useSimStore((s) => s.setTextFilter);
+  const typeFilter = useSimStore((s) => s.typeFilter);
+  const setTypeFilter = useSimStore((s) => s.setTypeFilter);
   const [sortKey, setSortKey] = useState<SortKey>('id');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const selectObject = useSimStore((s) => s.selectObject);

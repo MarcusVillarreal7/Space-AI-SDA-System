@@ -7,6 +7,7 @@ import type {
   AssessAllStatus,
   Alert,
   ThreatTier,
+  ObjectType,
 } from '../types';
 
 interface SimState {
@@ -34,6 +35,8 @@ interface SimState {
   isConnected: boolean;
   isLoading: boolean;
   bottomTab: string;
+  textFilter: string;
+  typeFilter: 'ALL' | ObjectType;
 
   // Actions
   setSimulation: (isPlaying: boolean, speed: number, timestep: number, maxTimestep: number, timeIso: string) => void;
@@ -48,6 +51,8 @@ interface SimState {
   setConnected: (connected: boolean) => void;
   setLoading: (loading: boolean) => void;
   setBottomTab: (tab: string) => void;
+  setTextFilter: (filter: string) => void;
+  setTypeFilter: (filter: 'ALL' | ObjectType) => void;
   setSpeed: (speed: number) => void;
   setPlaying: (playing: boolean) => void;
   resetVersion: number;
@@ -70,6 +75,8 @@ export const useSimStore = create<SimState>((set) => ({
   isConnected: false,
   isLoading: true,
   bottomTab: 'tracking',
+  textFilter: '',
+  typeFilter: 'ALL',
   resetVersion: 0,
 
   setSimulation: (isPlaying, speed, timestep, maxTimestep, timeIso) =>
@@ -98,6 +105,10 @@ export const useSimStore = create<SimState>((set) => ({
   setLoading: (loading) => set({ isLoading: loading }),
 
   setBottomTab: (tab) => set({ bottomTab: tab }),
+
+  setTextFilter: (filter) => set({ textFilter: filter }),
+
+  setTypeFilter: (filter) => set({ typeFilter: filter }),
 
   setSpeed: (speed) => set({ speed }),
 

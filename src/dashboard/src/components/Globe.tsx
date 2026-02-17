@@ -9,8 +9,7 @@ import {
   NearFarScalar,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
-  TileMapServiceImageryProvider,
-  buildModuleUrl,
+  OpenStreetMapImageryProvider,
   defined,
   CallbackProperty,
   MaterialProperty,
@@ -20,7 +19,7 @@ import { useSimStore } from '../store/useSimStore';
 import { TIER_COLORS } from '../types';
 import type { ThreatTier, ObjectType } from '../types';
 
-// Disable Ion — we use the bundled Natural Earth imagery (no auth needed)
+// Disable Ion — we use dark Carto tiles (no auth needed)
 Ion.defaultAccessToken = '';
 
 function tierToColor(tier: ThreatTier): Color {
@@ -44,10 +43,25 @@ export function Globe() {
   const selectObject = useSimStore((s) => s.selectObject);
   const selectedObjectId = useSimStore((s) => s.selectedObjectId);
   const prediction = useSimStore((s) => s.selectedPrediction);
+  const textFilter = useSimStore((s) => s.textFilter);
+  const typeFilter = useSimStore((s) => s.typeFilter);
 
-  // Build point data
+  // Build point data — apply TrackingTab filters so Globe stays in sync
   const pointData = useMemo(() => {
-    return objects.map((obj) => {
+    let filtered = objects;
+    if (typeFilter !== 'ALL') {
+      filtered = filtered.filter((o) => o.object_type === typeFilter || o.id === selectedObjectId);
+    }
+    if (textFilter) {
+      const lc = textFilter.toLowerCase();
+      filtered = filtered.filter(
+        (o) =>
+          o.name.toLowerCase().includes(lc) ||
+          String(o.id).includes(lc) ||
+          o.id === selectedObjectId
+      );
+    }
+    return filtered.map((obj) => {
       const shouldPulse = PULSE_TIERS.has(obj.threat_tier);
       const baseSize = TYPE_PIXEL_SIZE[obj.object_type] ?? 4;
       return {
@@ -60,7 +74,7 @@ export function Globe() {
         shouldPulse,
       };
     });
-  }, [objects, selectedObjectId]);
+  }, [objects, selectedObjectId, textFilter, typeFilter]);
 
   // Build predicted trajectory polyline positions
   const predictionPositions = useMemo(() => {
@@ -134,13 +148,13 @@ export function Globe() {
             if (viewerRef.current !== viewer) {
               viewerRef.current = viewer;
               setupClickHandler(viewer);
-              // Replace Ion imagery with bundled Natural Earth tiles
+              // Replace Ion imagery with dark Carto basemap tiles
               if (!imagerySetRef.current) {
                 imagerySetRef.current = true;
                 viewer.imageryLayers.removeAll();
-                const provider = new TileMapServiceImageryProvider({
-                  url: buildModuleUrl('Assets/Textures/NaturalEarthII'),
-                } as any);
+                const provider = new OpenStreetMapImageryProvider({
+                  url: 'https://basemaps.cartocdn.com/dark_all/',
+                });
                 viewer.imageryLayers.addImageryProvider(provider);
                 // Dark sky background
                 viewer.scene.backgroundColor = Color.fromCssColorString('#0a0e1a');
