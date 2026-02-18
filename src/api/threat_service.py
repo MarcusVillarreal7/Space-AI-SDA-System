@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import os
 import time
 from pathlib import Path
 from typing import Optional
@@ -74,13 +75,22 @@ class ThreatService:
             return
         try:
             from src.ml.threat_assessment import ThreatAssessmentPipeline
+            # CNN_LSTM_ENABLED=false skips the maneuver classifier on CPU-constrained
+            # deployments (e.g. Railway). Proximity, intent, and anomaly scoring still run.
+            cnn_lstm_enabled = os.environ.get("CNN_LSTM_ENABLED", "true").lower() != "false"
             self._pipeline = ThreatAssessmentPipeline(
                 anomaly_checkpoint="checkpoints/phase3_anomaly",
-                maneuver_checkpoint="checkpoints/phase3_day4/maneuver_classifier.pt",
-                device="cpu",  # CPU for dashboard responsiveness
+                maneuver_checkpoint=(
+                    "checkpoints/phase3_day4/maneuver_classifier.pt"
+                    if cnn_lstm_enabled else None
+                ),
+                device="cpu",
             )
             self._pipeline_loaded = True
-            logger.info("ThreatAssessmentPipeline loaded")
+            if cnn_lstm_enabled:
+                logger.info("ThreatAssessmentPipeline loaded (full — CNN-LSTM enabled)")
+            else:
+                logger.info("ThreatAssessmentPipeline loaded (fast — CNN-LSTM disabled via CNN_LSTM_ENABLED=false)")
         except Exception:
             logger.exception("Failed to load ThreatAssessmentPipeline — using defaults")
             self._pipeline = None

@@ -7,6 +7,7 @@ In production mode, also serves the built React static files.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -96,6 +97,15 @@ async def lifespan(app: FastAPI):
 
     # Start clock
     await clock.start()
+
+    # Auto-run assess-all in the background so threat tiers populate on startup
+    async def _startup_assess_all():
+        await asyncio.sleep(5)  # Let WebSocket clients connect first
+        logger.info("Auto-running assess-all at startup...")
+        await threat_service.assess_all(catalog, timestep=0)
+        logger.info("Startup assess-all complete")
+
+    asyncio.create_task(_startup_assess_all())
 
     elapsed = time.perf_counter() - t0
     logger.info("Backend ready in %.2fs — %d objects, %d timesteps",
