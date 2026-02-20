@@ -186,8 +186,9 @@ class TestMonitoringEndpoints:
 
     def test_monitoring_predictions_after_assess(self, client):
         """After assessing an object, prediction log should have an entry."""
-        # Trigger an assessment (which logs a prediction)
-        r = client.get("/api/threat/object/0")
+        # Use object 5 (not used by any prior test) to avoid DB cache hits
+        # that would skip prediction logging.
+        r = client.get("/api/threat/object/5")
         assert r.status_code == 200
 
         # Now check monitoring
