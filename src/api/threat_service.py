@@ -63,6 +63,7 @@ class ThreatService:
             "ELEVATED": 0, "CRITICAL": 0,
         }
         self._assessments: dict[int, dict] = {}  # object_id -> latest assessment
+        self._warm_cache: dict[int, dict] = {}  # warm-loaded assessments (read-only fast path)
         self._batch_index: int = 0  # For rotating batch assessment
         # Assess-all progress
         self._assess_all_running = False
@@ -77,6 +78,7 @@ class ThreatService:
         """
         for object_id, result in assessments.items():
             self._assessments[object_id] = result
+            self._warm_cache[object_id] = result
             tier = result.get("threat_tier", "MINIMAL")
             if tier in self._tier_counts:
                 self._tier_counts[tier] += 1
@@ -129,9 +131,11 @@ class ThreatService:
 
         Returns a dict matching ThreatAssessmentResponse schema.
         """
-        # Check in-memory cache first (populated by warm_load from snapshot/DB)
-        if use_cache and object_id in self._assessments:
-            return self._assessments[object_id]
+        # Check warm-loaded cache first (populated by warm_load from snapshot/DB).
+        # Only warm-loaded data lives here — not results from individual assess calls,
+        # so prediction logging and other side effects still run for ad-hoc assessments.
+        if use_cache and object_id in self._warm_cache:
+            return self._warm_cache[object_id]
 
         # Check database cache
         if use_cache:
