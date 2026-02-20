@@ -26,6 +26,7 @@ COPY src/ ./src/
 COPY scripts/ ./scripts/
 COPY checkpoints/ ./checkpoints/
 COPY data/processed/ml_train_1k/ ./data/processed/ml_train_1k/
+COPY data/assessments_snapshot.json ./data/assessments_snapshot.json
 
 # Copy built frontend
 COPY --from=frontend-build /app/src/dashboard/dist ./src/dashboard/dist
