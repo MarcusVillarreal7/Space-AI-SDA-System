@@ -146,7 +146,9 @@ class ThreatService:
         self._load_pipeline()
 
         if self._pipeline is None:
-            return self._default_assessment(object_id)
+            result = self._default_assessment(object_id)
+            self._log_result(object_id, result, object_type)
+            return result
 
         t0 = time.perf_counter()
         logger.info(
@@ -197,28 +199,7 @@ class ThreatService:
         cache_assessment(object_id, timestep, result)
 
         # Log prediction for monitoring/audit
-        try:
-            # Resolve object name from catalog
-            from src.api.main import app_state
-            catalog = app_state.get("catalog")
-            idx = catalog.get_object_index(object_id) if catalog else None
-            obj_name = catalog.object_names[idx] if (catalog and idx is not None) else f"Object-{object_id}"
-            obj_type_str = (catalog.object_types[idx]
-                            if (catalog and idx is not None and catalog.object_types)
-                            else object_type)
-            log_prediction(
-                object_id=object_id,
-                object_name=obj_name,
-                object_type=obj_type_str,
-                threat_tier=result["threat_tier"],
-                threat_score=result["threat_score"],
-                maneuver_class=result.get("maneuver_class"),
-                anomaly_score=result.get("anomaly_score"),
-                proximity_score=result.get("proximity_score"),
-                latency_ms=result.get("latency_ms", elapsed_ms),
-            )
-        except Exception:
-            logger.debug("Failed to log prediction for object %d", object_id, exc_info=True)
+        self._log_result(object_id, result, object_type, elapsed_ms)
 
         # Store in memory
         self._assessments[object_id] = result
@@ -472,6 +453,30 @@ class ThreatService:
                 threat_tiers[object_id] = tier
         except Exception:
             pass  # Don't break assessment if app_state isn't ready
+
+    def _log_result(self, object_id: int, result: dict, object_type: str = "PAYLOAD", elapsed_ms: float = 0.0) -> None:
+        """Log a prediction to the monitoring/audit table."""
+        try:
+            from src.api.main import app_state
+            catalog = app_state.get("catalog")
+            idx = catalog.get_object_index(object_id) if catalog else None
+            obj_name = catalog.object_names[idx] if (catalog and idx is not None) else f"Object-{object_id}"
+            obj_type_str = (catalog.object_types[idx]
+                            if (catalog and idx is not None and catalog.object_types)
+                            else object_type)
+            log_prediction(
+                object_id=object_id,
+                object_name=obj_name,
+                object_type=obj_type_str,
+                threat_tier=result["threat_tier"],
+                threat_score=result["threat_score"],
+                maneuver_class=result.get("maneuver_class"),
+                anomaly_score=result.get("anomaly_score"),
+                proximity_score=result.get("proximity_score"),
+                latency_ms=result.get("latency_ms", elapsed_ms),
+            )
+        except Exception:
+            logger.debug("Failed to log prediction for object %d", object_id, exc_info=True)
 
     @staticmethod
     def _default_assessment(object_id: int) -> dict:
