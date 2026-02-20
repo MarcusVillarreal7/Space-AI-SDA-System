@@ -120,14 +120,13 @@ class ConjunctionService:
                 dists = np.linalg.norm(diff, axis=2)  # (c1, c2)
 
                 # Find close pairs (upper triangle only to avoid duplicates)
-                for li in range(dists.shape[0]):
-                    for lj in range(dists.shape[1]):
-                        gi = i_start + li
-                        gj = j_start + lj
-                        if gi >= gj:
-                            continue
-                        if dists[li, lj] < threshold_km:
-                            close_pairs.append((gi, gj, dists[li, lj]))
+                if i_start == j_start:
+                    mask = np.triu(dists < threshold_km, k=1)
+                else:
+                    mask = dists < threshold_km
+                rows, cols = np.where(mask)
+                for r, c in zip(rows, cols):
+                    close_pairs.append((i_start + r, j_start + c, dists[r, c]))
 
         self._analyzed_count = len(close_pairs)
 

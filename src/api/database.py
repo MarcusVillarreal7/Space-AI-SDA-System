@@ -210,6 +210,39 @@ def get_cached_assessment(object_id: int, timestep: int) -> dict | None:
     return None
 
 
+def get_all_cached_assessments() -> dict[int, dict]:
+    """Load the most recent cached assessment for every object. Returns {object_id: result}."""
+    from sqlalchemy import func
+    session = get_session()
+    # Subquery: latest created_at per object_id
+    subq = (
+        session.query(
+            AssessmentCache.object_id,
+            func.max(AssessmentCache.created_at).label("latest"),
+        )
+        .group_by(AssessmentCache.object_id)
+        .subquery()
+    )
+    entries = (
+        session.query(AssessmentCache)
+        .join(
+            subq,
+            (AssessmentCache.object_id == subq.c.object_id)
+            & (AssessmentCache.created_at == subq.c.latest),
+        )
+        .all()
+    )
+    result: dict[int, dict] = {}
+    for e in entries:
+        try:
+            result[e.object_id] = json.loads(e.result_json)
+        except Exception:
+            pass
+    session.close()
+    logger.info("Loaded %d cached assessments from database", len(result))
+    return result
+
+
 # --- Prediction logging ---
 
 def log_prediction(

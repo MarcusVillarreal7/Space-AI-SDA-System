@@ -69,6 +69,21 @@ class ThreatService:
         self._assess_all_completed = 0
         self._assess_all_total = 0
 
+    def warm_load(self, assessments: dict[int, dict]) -> None:
+        """Populate in-memory state from pre-computed assessments (snapshot or DB cache).
+
+        Called on startup so the globe and WebSocket broadcasts show correct threat
+        tiers immediately without needing to run the ML pipeline.
+        """
+        for object_id, result in assessments.items():
+            self._assessments[object_id] = result
+            tier = result.get("threat_tier", "MINIMAL")
+            if tier in self._tier_counts:
+                self._tier_counts[tier] += 1
+        self._assess_all_completed = len(assessments)
+        self._assess_all_total = len(assessments)
+        logger.info("Warm-loaded %d pre-computed assessments into ThreatService", len(assessments))
+
     def _load_pipeline(self) -> None:
         """Lazy-load the threat assessment pipeline."""
         if self._pipeline_loaded:
@@ -114,7 +129,11 @@ class ThreatService:
 
         Returns a dict matching ThreatAssessmentResponse schema.
         """
-        # Check cache
+        # Check in-memory cache first (populated by warm_load from snapshot/DB)
+        if use_cache and object_id in self._assessments:
+            return self._assessments[object_id]
+
+        # Check database cache
         if use_cache:
             cached = get_cached_assessment(object_id, timestep)
             if cached:
@@ -423,8 +442,9 @@ class ThreatService:
                             message=msg,
                         )
 
-                # Yield to event loop between batches
-                await asyncio.sleep(0)
+                    # Yield to event loop after every object so health checks
+                    # and WebSocket broadcasts are never starved during assess-all
+                    await asyncio.sleep(0)
         finally:
             self._assess_all_running = False
             logger.info("Assess-all complete: %d/%d objects",

@@ -65,20 +65,29 @@ async def lifespan(app: FastAPI):
     threat_service = ThreatService()
     app_state["threat_service"] = threat_service
 
+    # Read deployment mode
+    import os
+    read_only = os.environ.get("READ_ONLY", "false").lower() == "true"
+    app_state["read_only"] = read_only
+    if read_only:
+        logger.info("READ_ONLY mode active — assess-all and reset endpoints disabled")
+
     # Initialize conjunction service
+    # CONJUNCTION_INTERVAL: ticks between runs (default 10 = ~10s local, set 300 = ~5min on Railway)
+    conjunction_interval = int(os.environ.get("CONJUNCTION_INTERVAL", "10"))
     from src.api.conjunction_service import ConjunctionService
-    conjunction_service = ConjunctionService(run_interval=10)
+    conjunction_service = ConjunctionService(run_interval=conjunction_interval)
     app_state["conjunction_service"] = conjunction_service
 
     # Initialize ingestion service
     from src.api.ingestion import IngestionService
     app_state["ingestion_service"] = IngestionService(catalog)
 
-    # Initialize database and clear stale data from previous runs
+    # Initialize database — clear alerts but preserve the assessment cache so
+    # warm-load can restore threat tiers without re-running the ML pipeline.
     init_db()
-    from src.api.database import clear_alerts, clear_assessment_cache
+    from src.api.database import clear_alerts, get_all_cached_assessments
     clear_alerts()
-    clear_assessment_cache()
 
     # Track metrics
     app_state["metrics"] = {
@@ -87,6 +96,53 @@ async def lifespan(app: FastAPI):
         "assessments_completed": 0,
         "start_time": time.time(),
     }
+
+    # Warm-load cached assessments so the globe shows correct threat tiers immediately.
+    # Priority: snapshot JSON file (for Railway/PostgreSQL) → SQLite cache (local dev).
+    import json as _json
+    _snapshot_path = Path("data/assessments_snapshot.json")
+    cached_assessments: dict = {}
+
+    if _snapshot_path.exists():
+        try:
+            _snap = _json.loads(_snapshot_path.read_text())
+            cached_assessments = {int(k): v for k, v in _snap.get("assessments", {}).items()}
+            logger.info("Loaded %d assessments from snapshot file (%s)",
+                        len(cached_assessments), _snap.get("exported_at", "unknown"))
+        except Exception:
+            logger.warning("Failed to load snapshot file — falling back to DB cache")
+
+    if not cached_assessments:
+        cached_assessments = get_all_cached_assessments()
+
+    if cached_assessments:
+        threat_service.warm_load(cached_assessments)
+        for oid, result in cached_assessments.items():
+            app_state["threat_tiers"][oid] = result.get("threat_tier", "MINIMAL")
+        logger.info("Warm-loaded %d assessments — threat tiers ready", len(cached_assessments))
+
+        # Regenerate alerts for ELEVATED/CRITICAL objects from warm-loaded data
+        from src.api.database import store_alert
+        alert_count = 0
+        for oid, result in cached_assessments.items():
+            tier = result.get("threat_tier", "MINIMAL")
+            if tier in ("ELEVATED", "CRITICAL"):
+                idx = catalog.get_object_index(oid)
+                obj_name = catalog.object_names[idx] if idx is not None else f"Object-{oid}"
+                explanation = result.get("explanation", "")
+                msg = f"{obj_name}: {explanation}" if explanation else f"{obj_name} assessed as {tier}"
+                store_alert(
+                    object_id=oid,
+                    object_name=obj_name,
+                    threat_tier=tier,
+                    threat_score=result.get("threat_score", 0.0),
+                    message=msg,
+                )
+                alert_count += 1
+        if alert_count:
+            logger.info("Generated %d alerts from warm-loaded assessments", alert_count)
+    else:
+        logger.info("No cached assessments found — threat tiers will populate after assess-all")
 
     # Register WebSocket broadcast callback
     from src.api.routes.websocket import broadcast_positions
@@ -98,14 +154,20 @@ async def lifespan(app: FastAPI):
     # Start clock
     await clock.start()
 
-    # Auto-run assess-all in the background so threat tiers populate on startup
-    async def _startup_assess_all():
-        await asyncio.sleep(5)  # Let WebSocket clients connect first
-        logger.info("Auto-running assess-all at startup...")
-        await threat_service.assess_all(catalog, timestep=0)
-        logger.info("Startup assess-all complete")
-
-    asyncio.create_task(_startup_assess_all())
+    # Auto-run assess-all at startup only when explicitly enabled.
+    # Default is off — use warm-load from cache, or trigger manually via POST /api/threat/assess-all.
+    auto_assess = os.environ.get("AUTO_ASSESS_ON_STARTUP", "false").lower() == "true"
+    if auto_assess and not read_only:
+        async def _startup_assess_all():
+            await asyncio.sleep(5)  # Let WebSocket clients connect first
+            logger.info("Auto-running assess-all at startup...")
+            await threat_service.assess_all(catalog, timestep=0)
+            logger.info("Startup assess-all complete")
+        asyncio.create_task(_startup_assess_all())
+    elif read_only:
+        logger.info("Startup assess-all skipped (READ_ONLY mode)")
+    else:
+        logger.info("Startup assess-all skipped (set AUTO_ASSESS_ON_STARTUP=true to enable)")
 
     elapsed = time.perf_counter() - t0
     logger.info("Backend ready in %.2fs — %d objects, %d timesteps",
@@ -160,6 +222,7 @@ async def health():
         "status": "ok",
         "objects_loaded": catalog.n_objects if catalog else 0,
         "timesteps": catalog.n_timesteps if catalog else 0,
+        "read_only": app_state.get("read_only", False),
     }
 
 

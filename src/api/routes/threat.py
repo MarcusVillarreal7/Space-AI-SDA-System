@@ -105,9 +105,12 @@ async def predict_trajectory(object_id: int):
 @router.post("/assess-all", response_model=AssessAllStatus)
 async def assess_all():
     """Start full assessment of all objects in background."""
+    from src.api.main import app_state
+    if app_state.get("read_only"):
+        raise HTTPException(status_code=403, detail="Read-only deployment — use demo video for full ML pipeline run")
+
     catalog = _get_catalog()
     service = _get_threat_service()
-    from src.api.main import app_state
     clock = app_state.get("clock")
     timestep = clock.timestep if clock else 0
 
@@ -151,6 +154,9 @@ async def get_alerts(
 @router.delete("/alerts")
 async def delete_alerts():
     """Clear all alerts from the database."""
+    from src.api.main import app_state
+    if app_state.get("read_only"):
+        raise HTTPException(status_code=403, detail="Read-only deployment")
     from src.api.database import clear_alerts
     count = clear_alerts()
     return {"deleted": count}

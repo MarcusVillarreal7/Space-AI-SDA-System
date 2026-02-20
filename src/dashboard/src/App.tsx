@@ -19,6 +19,7 @@ export default function App() {
   const setThreatSummary = useSimStore((s) => s.setThreatSummary);
   const setAlerts = useSimStore((s) => s.setAlerts);
   const setSimulation = useSimStore((s) => s.setSimulation);
+  const setReadOnly = useSimStore((s) => s.setReadOnly);
 
   const selectObject = useSimStore((s) => s.selectObject);
   const isPlaying = useSimStore((s) => s.isPlaying);
@@ -77,6 +78,11 @@ export default function App() {
     api.getThreatSummary().then(setThreatSummary).catch(() => {});
     api.getAlerts().then(setAlerts).catch(() => {});
 
+    // Detect read-only deployment mode from health endpoint
+    fetch('/api/health').then((r) => r.json()).then((h) => {
+      if (h.read_only) setReadOnly(true);
+    }).catch(() => {});
+
     // Poll threat summary every 30s
     const interval = setInterval(() => {
       api.getThreatSummary().then(setThreatSummary).catch(() => {});
@@ -84,7 +90,7 @@ export default function App() {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [setThreatSummary, setAlerts, setSimulation]);
+  }, [setThreatSummary, setAlerts, setSimulation, setReadOnly]);
 
   if (isLoading) {
     return (

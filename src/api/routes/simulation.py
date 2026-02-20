@@ -78,6 +78,8 @@ async def seek(timestep: int = Query(..., ge=0)):
 async def reset_simulation():
     """Reset simulation to initial state: clock to 0, clear all assessments and alerts."""
     from src.api.main import app_state
+    if app_state.get("read_only"):
+        raise HTTPException(status_code=403, detail="Read-only deployment — reset disabled")
     from src.api.database import clear_alerts, clear_assessment_cache
 
     # Reset clock to beginning and resume playback

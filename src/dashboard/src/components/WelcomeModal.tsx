@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useSimStore } from '../store/useSimStore';
 
 const STORAGE_KEY = 'sda-welcome-dismissed';
 
 export function WelcomeModal() {
   const [visible, setVisible] = useState(false);
+  const readOnly = useSimStore((s) => s.readOnly);
 
   useEffect(() => {
     // Show on first visit (or if user hasn't dismissed yet this session)
@@ -141,7 +143,9 @@ export function WelcomeModal() {
             <p>
               7 adversary scenarios are injected on objects 990-996, modeled after real-world events:
               rendezvous approaches, GEO shadowing, evasive maneuvers, phasing burns, and collision-course debris.
-              Run <strong>Full Assessment</strong> to trigger detection across all 1,000 objects.
+              {readOnly
+                ? ' All 1,000 objects have been pre-assessed through the full ML pipeline — threat tiers and alerts are ready to explore.'
+                : ' Run Full Assessment to trigger detection across all 1,000 objects.'}
             </p>
           </div>
 
@@ -151,11 +155,32 @@ export function WelcomeModal() {
             <ul className="list-disc list-inside space-y-0.5">
               <li>Click any object on the globe to view its threat assessment</li>
               <li>Use the <strong>Tracking</strong> tab to filter by object type and sort by threat tier</li>
-              <li>Press <strong>Full Assessment</strong> (in About tab) to assess all 1,000 objects</li>
+              {!readOnly && (
+                <li>Press <strong>Full Assessment</strong> to assess all 1,000 objects</li>
+              )}
               <li>The <strong>Alert Feed</strong> shows only ELEVATED and CRITICAL detections</li>
               <li>Keyboard: <strong>Space</strong> = play/pause, <strong>+/-</strong> = speed, <strong>Esc</strong> = deselect</li>
             </ul>
           </div>
+
+          {/* Read-only note */}
+          {readOnly && (
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded p-3">
+              <p className="text-xs text-blue-300">
+                This is a <strong>read-only deployment</strong> — all 1,000 objects have been pre-assessed
+                using a GPU-accelerated ML pipeline (RTX 4080). Threat tiers, CNN-LSTM classifications,
+                and anomaly scores are served from a pre-computed snapshot.
+              </p>
+              <a
+                href="https://github.com/MarcusVillarreal7/Space-AI-SDA-System"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-blue-400 hover:text-blue-300 mt-1 inline-block transition-colors"
+              >
+                See GitHub for full project breakdown &rarr;
+              </a>
+            </div>
+          )}
         </div>
 
         {/* Footer */}

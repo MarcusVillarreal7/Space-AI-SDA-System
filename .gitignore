@@ -9,8 +9,9 @@ env/
 ENV/
 .venv
 
-# Data (ignore all except runtime parquet)
+# Data (ignore all except runtime parquet and assessment snapshot)
 data/*
+!data/assessments_snapshot.json
 !data/processed/
 data/processed/*
 !data/processed/ml_train_1k/

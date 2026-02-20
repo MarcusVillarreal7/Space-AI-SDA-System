@@ -11,6 +11,7 @@ export function ThreatSummary() {
   const setAlerts = useSimStore((s) => s.setAlerts);
   const triggerReset = useSimStore((s) => s.triggerReset);
   const setPlaying = useSimStore((s) => s.setPlaying);
+  const readOnly = useSimStore((s) => s.readOnly);
   const pollRef = useRef<ReturnType<typeof setInterval>>();
 
   const handleAssessAll = useCallback(async () => {
@@ -125,6 +126,20 @@ export function ThreatSummary() {
                 style={{ width: `${progressPct}%` }}
               />
             </div>
+          </div>
+        ) : readOnly ? (
+          <div className="py-2 px-3 bg-space-700/50 rounded border border-space-600 text-center">
+            <p className="text-xs text-slate-400">
+              Read-only dashboard — all 1,000 objects pre-assessed
+            </p>
+            <a
+              href="https://github.com/MarcusVillarreal7/Space-AI-SDA-System"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              See GitHub for full ML pipeline breakdown &rarr;
+            </a>
           </div>
         ) : (
           <div className="flex gap-2">

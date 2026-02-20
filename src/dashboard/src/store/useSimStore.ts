@@ -31,6 +31,9 @@ interface SimState {
   // Assess-all progress
   assessAllStatus: AssessAllStatus | null;
 
+  // Deployment mode
+  readOnly: boolean;
+
   // UI
   isConnected: boolean;
   isLoading: boolean;
@@ -48,6 +51,7 @@ interface SimState {
   setAlerts: (alerts: Alert[]) => void;
   addAlert: (alert: Alert) => void;
   setAssessAllStatus: (status: AssessAllStatus | null) => void;
+  setReadOnly: (readOnly: boolean) => void;
   setConnected: (connected: boolean) => void;
   setLoading: (loading: boolean) => void;
   setBottomTab: (tab: string) => void;
@@ -72,6 +76,7 @@ export const useSimStore = create<SimState>((set) => ({
   selectedPrediction: null,
   alerts: [],
   assessAllStatus: null,
+  readOnly: false,
   isConnected: false,
   isLoading: true,
   bottomTab: 'tracking',
@@ -99,6 +104,8 @@ export const useSimStore = create<SimState>((set) => ({
     set((state) => ({ alerts: [alert, ...state.alerts].slice(0, 100) })),
 
   setAssessAllStatus: (status) => set({ assessAllStatus: status }),
+
+  setReadOnly: (readOnly) => set({ readOnly }),
 
   setConnected: (connected) => set({ isConnected: connected }),
 
