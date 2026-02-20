@@ -86,7 +86,7 @@ async def lifespan(app: FastAPI):
     # Initialize database — clear alerts but preserve the assessment cache so
     # warm-load can restore threat tiers without re-running the ML pipeline.
     init_db()
-    from src.api.database import clear_alerts, get_all_cached_assessments
+    from src.api.database import clear_alerts, clear_assessment_cache, get_all_cached_assessments
     clear_alerts()
 
     # Track metrics
@@ -142,6 +142,7 @@ async def lifespan(app: FastAPI):
         if alert_count:
             logger.info("Generated %d alerts from warm-loaded assessments", alert_count)
     else:
+        clear_assessment_cache()
         logger.info("No cached assessments found — threat tiers will populate after assess-all")
 
     # Register WebSocket broadcast callback
